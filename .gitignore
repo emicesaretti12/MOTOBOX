@@ -1,0 +1,32 @@
+# MotoBox CRM
+
+## Logs
+logs
+*.log
+npm-debug.log*
+
+## Dependencies
+node_modules/
+
+## Environment
+.env
+.env.local
+.env.*.local
+
+## Build
+dist/
+dist-ssr/
+
+## IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+## OS
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+Thumbs.db
