@@ -9,6 +9,7 @@ import {
   Menu,
   X,
   Plus,
+  Settings,
 } from 'lucide-react'
 
 export default function Layout() {
@@ -22,6 +23,7 @@ export default function Layout() {
     if (path === '/leads') return 'Gestión de Leads'
     if (path.startsWith('/leads/')) return 'Detalle del Lead'
     if (path === '/usuarios') return 'Gestión de Usuarios'
+    if (path === '/perfil') return 'Mi Perfil'
     return 'MotoBox CRM'
   }
 
@@ -123,6 +125,18 @@ export default function Layout() {
               </NavLink>
             </>
           )}
+
+          <span className="sidebar-section-label">Cuenta</span>
+          <NavLink
+            to="/perfil"
+            className={({ isActive }) =>
+              `sidebar-link ${isActive ? 'active' : ''}`
+            }
+            onClick={() => setSidebarOpen(false)}
+          >
+            <Settings size={20} />
+            Mi Perfil
+          </NavLink>
         </nav>
 
         <div className="sidebar-footer">

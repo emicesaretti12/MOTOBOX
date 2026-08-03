@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage'
 import LeadsPage from './pages/LeadsPage'
 import LeadDetailPage from './pages/LeadDetailPage'
 import UsersPage from './pages/UsersPage'
+import ProfilePage from './pages/ProfilePage'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -70,6 +71,7 @@ function AppRoutes() {
         <Route index element={<DashboardPage />} />
         <Route path="leads" element={<LeadsPage />} />
         <Route path="leads/:id" element={<LeadDetailPage />} />
+        <Route path="perfil" element={<ProfilePage />} />
         <Route
           path="usuarios"
           element={
