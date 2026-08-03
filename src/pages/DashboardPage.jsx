@@ -47,12 +47,12 @@ export default function DashboardPage() {
     try {
       let leadsQuery = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(full_name)')
       let intQuery = supabase.from('interacciones')
-        .select('*, lead:leads!inner(id, nombre, apellido, modelo_interes), usuario:profiles!inner(full_name)')
-        .order('created_at', { ascending: false })
+        .select('*, lead:leads!inner(id, nombre, modelo_interes), usuario:profiles!inner(full_name)')
+        .order('fecha', { ascending: false })
       
       if (!isAdmin) {
         leadsQuery = leadsQuery.eq('vendedor_asignado', profile.id)
-        intQuery = intQuery.eq('lead.vendedor_asignado', profile.id)
+        intQuery = intQuery.eq('usuario_id', profile.id)
       }
 
       const [leadsRes, intRes] = await Promise.all([leadsQuery, intQuery])
@@ -261,7 +261,7 @@ export default function DashboardPage() {
               {followupItems.length > 0 ? followupItems.map((item, idx) => (
                 <div key={idx} className="followup-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', backgroundColor: '#FEF2F2', borderRadius: '6px', border: '1px solid #FEE2E2' }}>
                   <div className="followup-info">
-                    <div style={{ fontWeight: 'bold', color: '#991B1B' }}>{item.lead.nombre} {item.lead.apellido}</div>
+                    <div style={{ fontWeight: 'bold', color: '#991B1B' }}>{item.lead.nombre}</div>
                     <div style={{ fontSize: '0.85rem', color: '#B91C1C' }}>{item.lead.modelo_interes || 'Sin modelo'}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -289,7 +289,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="activity-info" style={{ flex: 1 }}>
                     <div style={{ fontSize: '0.9rem' }}>
-                      <strong>{act.usuario?.full_name}</strong> {act.tipo === 'nota' ? 'agregó una nota en' : `registró ${act.tipo} con`} <span className="activity-lead-name" style={{ fontWeight: '500', color: '#2563EB' }}>{act.lead?.nombre} {act.lead?.apellido}</span>
+                      <strong>{act.usuario?.full_name}</strong> {act.tipo === 'nota' ? 'agregó una nota en' : `registró ${act.tipo} con`} <span className="activity-lead-name" style={{ fontWeight: '500', color: '#2563EB' }}>{act.lead?.nombre}</span>
                     </div>
                     <div className="activity-time" style={{ fontSize: '0.8rem', color: '#9CA3AF', marginTop: '0.2rem' }}>
                       {timeAgo(act.created_at)}

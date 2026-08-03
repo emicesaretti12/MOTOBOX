@@ -58,7 +58,7 @@ export default function LeadsPage() {
         .from('leads')
         .select(`
           *,
-          vendedor:profiles!vendedor_asignado(id, full_name, email)
+          vendedor:profiles!vendedor_asignado(id, full_name)
         `)
         .order('created_at', { ascending: false })
 

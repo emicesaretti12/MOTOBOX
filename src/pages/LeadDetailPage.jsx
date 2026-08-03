@@ -20,7 +20,7 @@ function getWhatsAppLink(phone) {
 export default function LeadDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { addToast } = useToast()
   
   const [lead, setLead] = useState(null)
@@ -31,7 +31,6 @@ export default function LeadDetailPage() {
   const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false)
   
   const [vendedores, setVendedores] = useState([])
-  const isAdmin = user?.role === 'admin'
   
   // Edit Form State
   const [editForm, setEditForm] = useState({
@@ -54,7 +53,7 @@ export default function LeadDetailPage() {
       .from('leads')
       .select(`
         *,
-        vendedor:vendedor_asignado(full_name)
+        vendedor:profiles!vendedor_asignado(full_name)
       `)
       .eq('id', id)
       .single()
@@ -84,10 +83,10 @@ export default function LeadDetailPage() {
       .from('interacciones')
       .select(`
         *,
-        user:user_id(full_name)
+        usuario:profiles!usuario_id(full_name)
       `)
       .eq('lead_id', id)
-      .order('created_at', { ascending: false })
+      .order('fecha', { ascending: false })
       
     if (error) {
       console.error('Error fetching interactions', error)
@@ -136,7 +135,7 @@ export default function LeadDetailPage() {
     
     const newInteraction = {
       lead_id: id,
-      user_id: user.id,
+      usuario_id: user.id,
       tipo: interactionForm.tipo,
       detalle: interactionForm.detalle
     }
@@ -373,9 +372,9 @@ export default function LeadDetailPage() {
                           <p className="text-sm text-[var(--color-text-secondary)] whitespace-pre-wrap">{interaction.detalle}</p>
                           <div className="mt-3 text-xs text-[var(--color-text-tertiary)] flex items-center gap-1 pt-3 border-t border-[var(--color-border)]">
                             <span className="w-4 h-4 rounded-full bg-[var(--color-primary-alpha)] flex items-center justify-center text-[var(--color-primary)] font-bold">
-                              {interaction.user?.full_name ? interaction.user.full_name.charAt(0).toUpperCase() : '?'}
+                              {interaction.usuario?.full_name ? interaction.usuario.full_name.charAt(0).toUpperCase() : '?'}
                             </span>
-                            Registrado por {interaction.user?.full_name || 'Desconocido'}
+                            Registrado por {interaction.usuario?.full_name || 'Desconocido'}
                           </div>
                         </div>
                       </div>
