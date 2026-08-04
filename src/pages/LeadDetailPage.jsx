@@ -4,15 +4,9 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, MoreHorizontal, Edit, Plus, X, Check } from 'lucide-react'
+import { LEAD_STATUS_LABELS, INTERACTION_TYPE_LABELS, PIPELINE_ORDER, formatCurrency, formatDateTime, getWhatsAppLink, getErrorMessage } from '../lib/utils'
 
-const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
-const TIPO_LABELS = { llamada: 'Llamada', whatsapp: 'WhatsApp', email: 'Email', visita: 'Visita', otro: 'Otro' }
-const PIPELINE = ['nuevo', 'contactado', 'en_negociacion', 'venta_cerrada']
 const TIPO_ICONS = { llamada: Phone, whatsapp: MessageCircle, email: Mail, visita: MapPin, otro: MoreHorizontal }
-
-function fmt$(v) { return v ? '$' + Number(v).toLocaleString('es-AR') : '-' }
-function fmtDate(d) { return d ? new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-' }
-function getWa(ph) { if (!ph) return null; const c = ph.replace(/\D/g, ''); return 'https://wa.me/' + (c.startsWith('54') ? c : '54' + c) }
 
 export default function LeadDetailPage() {
   const { id } = useParams()
@@ -51,14 +45,29 @@ export default function LeadDetailPage() {
 
   async function handleStatusChange(newStatus) {
     if (newStatus === lead.estado) return
-    if (!window.confirm(`¿Cambiar estado a ${STATUS_LABELS[newStatus]}?`)) return
+    if (!window.confirm(`¿Cambiar estado a ${LEAD_STATUS_LABELS[newStatus]}?`)) return
     try {
-      const { error } = await supabase.from('leads').update({ estado: newStatus }).eq('id', id)
-      if (error) throw error
-      await supabase.from('historial_cambios').insert({ lead_id: id, usuario_id: user.id, campo: 'Estado', valor_anterior: STATUS_LABELS[lead.estado], valor_nuevo: STATUS_LABELS[newStatus] })
+      const { error: updateError } = await supabase.from('leads').update({ estado: newStatus }).eq('id', id)
+      if (updateError) throw updateError
+      
+      const { error: historyError } = await supabase.from('historial_cambios').insert({
+        lead_id: id,
+        usuario_id: user.id,
+        campo: 'Estado',
+        valor_anterior: LEAD_STATUS_LABELS[lead.estado],
+        valor_nuevo: LEAD_STATUS_LABELS[newStatus]
+      })
+      
+      if (historyError) {
+        console.error('Error saving history:', historyError)
+      }
+      
       addToast('Estado actualizado', 'success')
       fetchAll()
-    } catch (e) { addToast('Error', 'error') }
+    } catch (e) {
+      console.error('Error changing status:', e)
+      addToast(getErrorMessage(e) || 'Error al cambiar estado', 'error')
+    }
   }
 
   function openEdit() {
@@ -105,7 +114,7 @@ export default function LeadDetailPage() {
   if (loading) return <div className="spinner-overlay"><div className="spinner" /></div>
   if (!lead) return <div className="empty-state"><p>Lead no encontrado</p></div>
 
-  const pipeIdx = PIPELINE.indexOf(lead.estado)
+  const pipeIdx = PIPELINE_ORDER.indexOf(lead.estado)
   const isPerdido = lead.estado === 'perdido'
 
   return (
@@ -115,12 +124,12 @@ export default function LeadDetailPage() {
 
       {/* Pipeline */}
       <div className="pipeline">
-        {PIPELINE.map((step, i) => (
+        {PIPELINE_ORDER.map((step, i) => (
           <div key={step} style={{ display: 'flex', alignItems: 'center' }}>
             {i > 0 && <div className={`pipeline-connector ${i <= pipeIdx && !isPerdido ? 'completed' : ''}`} />}
             <div className={`pipeline-step ${isPerdido ? (step === lead.estado ? 'perdido' : '') : i < pipeIdx ? 'completed' : i === pipeIdx ? 'active' : ''}`} onClick={() => handleStatusChange(step)}>
               <div className="pipeline-dot">{i < pipeIdx && !isPerdido ? <Check size={14} /> : i + 1}</div>
-              <span className="pipeline-label">{STATUS_LABELS[step]}</span>
+              <span className="pipeline-label">{LEAD_STATUS_LABELS[step]}</span>
             </div>
           </div>
         ))}
@@ -133,7 +142,7 @@ export default function LeadDetailPage() {
 
       {/* Quick Actions */}
       <div className="quick-actions">
-        <a className="quick-action wa" href={getWa(lead.telefono) || '#'} target="_blank" rel="noopener" {...(!lead.telefono && { disabled: true })}><MessageCircle size={16} /> WhatsApp</a>
+        <a className="quick-action wa" href={getWhatsAppLink(lead.telefono) || '#'} target="_blank" rel="noopener" {...(!lead.telefono && { disabled: true })}><MessageCircle size={16} /> WhatsApp</a>
         <a className="quick-action call" href={lead.telefono ? `tel:${lead.telefono}` : '#'} {...(!lead.telefono && { disabled: true })}><Phone size={16} /> Llamar</a>
         <a className="quick-action mail" href={lead.email ? `mailto:${lead.email}` : '#'} {...(!lead.email && { disabled: true })}><Mail size={16} /> Email</a>
         <button className="quick-action edit" onClick={openEdit}><Edit size={16} /> Editar</button>
@@ -150,13 +159,13 @@ export default function LeadDetailPage() {
             <div className="detail-row"><span className="detail-label">Email</span><span className="detail-value">{lead.email || '-'}</span></div>
             <div className="detail-row"><span className="detail-label">Modelo</span><span className="detail-value">{lead.modelo_interes || '-'}</span></div>
             <div className="detail-row"><span className="detail-label">Origen</span><span className="detail-value">{lead.origen}</span></div>
-            <div className="detail-row"><span className="detail-label">Presupuesto</span><span className="detail-value">{fmt$(lead.presupuesto_estimado)}</span></div>
+            <div className="detail-row"><span className="detail-label">Presupuesto</span><span className="detail-value">{formatCurrency(lead.presupuesto_estimado)}</span></div>
             <div className="detail-row"><span className="detail-label">Vendedor</span><span className="detail-value">{lead.vendedor?.full_name || 'Sin asignar'}</span></div>
-            <div className="detail-row"><span className="detail-label">Estado</span><span className="detail-value"><span className={`badge badge-${lead.estado}`}>{STATUS_LABELS[lead.estado]}</span></span></div>
-            <div className="detail-row"><span className="detail-label">Cita Agendada</span><span className="detail-value">{lead.fecha_agenda ? fmtDate(lead.fecha_agenda) : 'Sin agendar'}</span></div>
+            <div className="detail-row"><span className="detail-label">Estado</span><span className="detail-value"><span className={`badge badge-${lead.estado}`}>{LEAD_STATUS_LABELS[lead.estado]}</span></span></div>
+            <div className="detail-row"><span className="detail-label">Cita Agendada</span><span className="detail-value">{lead.fecha_agenda ? formatDateTime(lead.fecha_agenda) : 'Sin agendar'}</span></div>
             <div className="detail-row"><span className="detail-label">Notas</span><span className="detail-value">{lead.notas || '-'}</span></div>
-            <div className="detail-row"><span className="detail-label">Creado</span><span className="detail-value">{fmtDate(lead.created_at)}</span></div>
-            <div className="detail-row"><span className="detail-label">Actualizado</span><span className="detail-value">{fmtDate(lead.updated_at)}</span></div>
+            <div className="detail-row"><span className="detail-label">Creado</span><span className="detail-value">{formatDateTime(lead.created_at)}</span></div>
+            <div className="detail-row"><span className="detail-label">Actualizado</span><span className="detail-value">{formatDateTime(lead.updated_at)}</span></div>
           </div>
         </div>
 
@@ -175,9 +184,9 @@ export default function LeadDetailPage() {
                   <div key={a.id} className="timeline-item">
                     <div className={`timeline-icon ${a.tipo}`}><Icon size={16} /></div>
                     <div className="timeline-body">
-                      <div className="timeline-type">{TIPO_LABELS[a.tipo] || a.tipo}</div>
+                      <div className="timeline-type">{INTERACTION_TYPE_LABELS[a.tipo] || a.tipo}</div>
                       {a.detalle && <div className="timeline-detail">{a.detalle}</div>}
-                      <div className="timeline-meta">{a.usuario?.full_name} • {fmtDate(a.fecha)}</div>
+                      <div className="timeline-meta">{a.usuario?.full_name} • {formatDateTime(a.fecha)}</div>
                     </div>
                   </div>
                 )
@@ -195,7 +204,7 @@ export default function LeadDetailPage() {
                     <div className="feed-icon"><Edit size={12} /></div>
                     <div className="feed-body">
                       <div className="feed-text"><strong>{h.usuario?.full_name}</strong> cambió <span className="highlight">{h.campo}</span>: {h.valor_anterior || '(vacío)'} → {h.valor_nuevo || '(vacío)'}</div>
-                      <div className="feed-time">{fmtDate(h.created_at)}</div>
+                      <div className="feed-time">{formatDateTime(h.created_at)}</div>
                     </div>
                   </div>
                 ))}
@@ -222,7 +231,7 @@ export default function LeadDetailPage() {
                 </div>
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Origen</label><select className="form-input" value={editForm.origen} onChange={e => setEditForm({ ...editForm, origen: e.target.value })}><option value="whatsapp">WhatsApp</option><option value="facebook">Facebook</option><option value="instagram">Instagram</option><option value="presencial">Presencial</option><option value="referido">Referido</option><option value="otro">Otro</option></select></div>
-                  <div className="form-group"><label className="form-label">Estado</label><select className="form-input" value={editForm.estado} onChange={e => setEditForm({ ...editForm, estado: e.target.value })}>{Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+                  <div className="form-group"><label className="form-label">Estado</label><select className="form-input" value={editForm.estado} onChange={e => setEditForm({ ...editForm, estado: e.target.value })}>{Object.entries(LEAD_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                 </div>
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Presupuesto</label><input className="form-input" type="number" value={editForm.presupuesto_estimado} onChange={e => setEditForm({ ...editForm, presupuesto_estimado: e.target.value })} /></div>
@@ -250,7 +259,7 @@ export default function LeadDetailPage() {
                 <div className="form-group">
                   <label className="form-label">Tipo</label>
                   <select className="form-input" value={intForm.tipo} onChange={e => setIntForm({ ...intForm, tipo: e.target.value })}>
-                    {Object.entries(TIPO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    {Object.entries(INTERACTION_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </div>
                 <div className="form-group">

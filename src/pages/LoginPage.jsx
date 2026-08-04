@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { isValidDNI, isValidPassword, getErrorMessage } from '../lib/utils'
 
 export default function LoginPage() {
   const [dni, setDni] = useState('')
@@ -9,14 +10,41 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const { loginWithDNI } = useAuth()
 
+  function validateForm() {
+    if (!dni.trim()) {
+      setError('Por favor ingresa tu DNI')
+      return false
+    }
+    if (!isValidDNI(dni)) {
+      setError('DNI inválido (debe tener 7-8 dígitos)')
+      return false
+    }
+    if (!password) {
+      setError('Por favor ingresa tu contraseña')
+      return false
+    }
+    if (!isValidPassword(password)) {
+      setError('La contraseña debe tener al menos 6 caracteres')
+      return false
+    }
+    return true
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    
+    if (!validateForm()) {
+      return
+    }
+    
     setLoading(true)
     try {
       await loginWithDNI(dni.trim(), password)
     } catch (err) {
-      setError('DNI o contraseña incorrectos')
+      const errorMsg = getErrorMessage(err)
+      setError(errorMsg === err.message ? 'DNI o contraseña incorrectos' : errorMsg)
+      console.error('Login error:', err)
     } finally {
       setLoading(false)
     }

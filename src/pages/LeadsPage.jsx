@@ -4,14 +4,9 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { Plus, Search, X, LayoutGrid, List, Download, Phone, MessageCircle } from 'lucide-react'
+import { LEAD_STATUS_LABELS, LEAD_ORIGEN_LABELS, PIPELINE_ORDER, formatCurrency, getWhatsAppLink, exportToCSV, getErrorMessage } from '../lib/utils'
 
-const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
-const ORIGEN_LABELS = { whatsapp: 'WhatsApp', facebook: 'Facebook', instagram: 'Instagram', presencial: 'Presencial', referido: 'Referido', otro: 'Otro' }
-const STATUS_ORDER = ['nuevo', 'contactado', 'en_negociacion', 'venta_cerrada', 'perdido']
 const EMPTY_LEAD = { nombre: '', telefono: '', email: '', modelo_interes: '', origen: 'presencial', estado: 'nuevo', vendedor_asignado: '', presupuesto_estimado: '', fecha_agenda: '', notas: '' }
-
-function getWaLink(ph) { if (!ph) return null; const c = ph.replace(/\D/g, ''); return 'https://wa.me/' + (c.startsWith('54') ? c : '54' + c) }
-function fmt$(v) { return v ? '$' + Number(v).toLocaleString('es-AR') : '-' }
 
 export default function LeadsPage() {
   const navigate = useNavigate()
@@ -32,11 +27,20 @@ export default function LeadsPage() {
 
   useEffect(() => {
     fetchLeads()
-    if (isAdmin) supabase.from('profiles').select('id, full_name').order('full_name').then(({ data }) => setVendedores(data || []))
+    if (isAdmin) {
+      supabase.from('profiles').select('id, full_name').order('full_name')
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('Error fetching vendors:', error)
+            return
+          }
+          setVendedores(data || [])
+        })
+    }
     const h = () => openModal()
     window.addEventListener('open-new-lead', h)
     return () => window.removeEventListener('open-new-lead', h)
-  }, [])
+  }, [isAdmin, profile.id])
 
   async function fetchLeads() {
     try {
@@ -45,7 +49,10 @@ export default function LeadsPage() {
       const { data, error } = await q
       if (error) throw error
       setLeads(data || [])
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error('Error fetching leads:', e)
+      addToast('Error al cargar leads', 'error')
+    }
     finally { setLoading(false) }
   }
 
@@ -89,12 +96,25 @@ export default function LeadsPage() {
   }
 
   function exportCSV() {
-    const rows = [['Nombre', 'Teléfono', 'Email', 'Modelo', 'Origen', 'Estado', 'Presupuesto', 'Vendedor', 'Cita', 'Creado']]
-    filtered.forEach(l => rows.push([l.nombre, l.telefono || '', l.email || '', l.modelo_interes || '', ORIGEN_LABELS[l.origen] || l.origen, STATUS_LABELS[l.estado], l.presupuesto_estimado || '', l.vendedor?.full_name || '', l.fecha_agenda || '', new Date(l.created_at).toLocaleDateString('es-AR')]))
-    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `leads_${new Date().toISOString().slice(0, 10)}.csv`; a.click()
-    addToast('CSV exportado', 'success')
+    try {
+      const data = filtered.map(l => ({
+        Nombre: l.nombre,
+        Teléfono: l.telefono || '',
+        Email: l.email || '',
+        Modelo: l.modelo_interes || '',
+        Origen: LEAD_ORIGEN_LABELS[l.origen] || l.origen,
+        Estado: LEAD_STATUS_LABELS[l.estado],
+        Presupuesto: l.presupuesto_estimado || '',
+        Vendedor: l.vendedor?.full_name || '',
+        Cita: l.fecha_agenda ? new Date(l.fecha_agenda).toLocaleDateString('es-AR') : '',
+        Creado: new Date(l.created_at).toLocaleDateString('es-AR')
+      }))
+      exportToCSV(data, `leads_${new Date().toISOString().slice(0, 10)}.csv`)
+      addToast('CSV exportado', 'success')
+    } catch (e) {
+      console.error('Error exporting CSV:', e)
+      addToast('Error al exportar CSV', 'error')
+    }
   }
 
   if (loading) return <div className="spinner-overlay"><div className="spinner" /></div>
@@ -109,11 +129,11 @@ export default function LeadsPage() {
         </div>
         <select className="filter-select" value={filterEstado} onChange={e => setFilterEstado(e.target.value)}>
           <option value="">Todos los estados</option>
-          {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          {Object.entries(LEAD_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <select className="filter-select" value={filterOrigen} onChange={e => setFilterOrigen(e.target.value)}>
           <option value="">Todo origen</option>
-          {Object.entries(ORIGEN_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          {Object.entries(LEAD_ORIGEN_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         {isAdmin && (
           <select className="filter-select" value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)}>
@@ -148,14 +168,14 @@ export default function LeadsPage() {
                     <td className="table-cell-primary">{l.nombre}</td>
                     <td>{l.telefono || '-'}</td>
                     <td>{l.modelo_interes || '-'}</td>
-                    <td>{ORIGEN_LABELS[l.origen] || l.origen}</td>
-                    <td><span className={`badge badge-${l.estado}`}>{STATUS_LABELS[l.estado]}</span></td>
-                    <td>{fmt$(l.presupuesto_estimado)}</td>
+                    <td>{LEAD_ORIGEN_LABELS[l.origen] || l.origen}</td>
+                    <td><span className={`badge badge-${l.estado}`}>{LEAD_STATUS_LABELS[l.estado]}</span></td>
+                    <td>{formatCurrency(l.presupuesto_estimado)}</td>
                     {isAdmin && <td className="table-cell-secondary">{l.vendedor?.full_name || '-'}</td>}
                     <td className="table-cell-secondary">{l.fecha_agenda ? new Date(l.fecha_agenda).toLocaleDateString('es-AR') : '-'}</td>
                     <td>
                       <div className="table-actions" onClick={e => e.stopPropagation()}>
-                        {l.telefono && getWaLink(l.telefono) && <a href={getWaLink(l.telefono)} target="_blank" rel="noopener" className="btn-icon whatsapp"><MessageCircle size={16} /></a>}
+                        {l.telefono && getWhatsAppLink(l.telefono) && <a href={getWhatsAppLink(l.telefono)} target="_blank" rel="noopener noreferrer" className="btn-icon whatsapp"><MessageCircle size={16} /></a>}
                         {l.telefono && <a href={`tel:${l.telefono}`} className="btn-icon phone"><Phone size={16} /></a>}
                       </div>
                     </td>
@@ -170,12 +190,12 @@ export default function LeadsPage() {
       {/* KANBAN VIEW */}
       {viewMode === 'kanban' && (
         <div className="kanban-board">
-          {STATUS_ORDER.map(status => {
+          {PIPELINE_ORDER.map(status => {
             const items = filtered.filter(l => l.estado === status)
             return (
               <div key={status} className="kanban-column" data-status={status}>
                 <div className="kanban-column-header">
-                  <span className="kanban-column-title">{STATUS_LABELS[status]}</span>
+                  <span className="kanban-column-title">{LEAD_STATUS_LABELS[status]}</span>
                   <span className="kanban-column-count">{items.length}</span>
                 </div>
                 <div className="kanban-cards">
@@ -186,7 +206,7 @@ export default function LeadsPage() {
                       {l.telefono && <div className="kanban-card-meta"><Phone size={11} /> {l.telefono}</div>}
                       {l.fecha_agenda && <div className="kanban-card-meta">📅 {new Date(l.fecha_agenda).toLocaleDateString('es-AR')}</div>}
                       <div className="kanban-card-footer">
-                        <span className="kanban-card-budget">{fmt$(l.presupuesto_estimado)}</span>
+                        <span className="kanban-card-budget">{formatCurrency(l.presupuesto_estimado)}</span>
                         {isAdmin && <span className="kanban-card-vendor">{l.vendedor?.full_name || ''}</span>}
                       </div>
                     </div>

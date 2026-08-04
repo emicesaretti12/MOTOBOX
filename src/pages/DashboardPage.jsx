@@ -4,22 +4,9 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { Users, TrendingUp, Target, Award, DollarSign, ChevronRight, Phone, MessageCircle } from 'lucide-react'
+import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, timeAgo, formatCurrency } from '../lib/utils'
 
-const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
-const STATUS_COLORS = { nuevo: '#2563EB', contactado: '#D97706', en_negociacion: '#7C3AED', venta_cerrada: '#16A34A', perdido: '#71717A' }
 const TIPO_ICONS = { llamada: Phone, whatsapp: MessageCircle }
-
-function timeAgo(date) {
-  const s = Math.floor((Date.now() - new Date(date)) / 1000)
-  if (s < 60) return 'Ahora'
-  if (s < 3600) return `Hace ${Math.floor(s / 60)} min`
-  if (s < 86400) return `Hace ${Math.floor(s / 3600)} hs`
-  return `Hace ${Math.floor(s / 86400)} días`
-}
-
-function formatCurrency(v) {
-  return v ? '$' + Number(v).toLocaleString('es-AR') : '-'
-}
 
 export default function DashboardPage() {
   const { profile, isAdmin } = useAuth()
@@ -33,9 +20,11 @@ export default function DashboardPage() {
   async function fetchData() {
     try {
       let lq = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(full_name)')
+      // IMPORTANTE: No limitar interacciones aqui, se usan para calcular seguimientos pendientes
+      // El limite se aplica solo al feed de actividad reciente
       let iq = supabase.from('interacciones')
         .select('*, lead:leads!lead_id(id, nombre, modelo_interes), usuario:profiles!usuario_id(full_name)')
-        .order('fecha', { ascending: false }).limit(10)
+        .order('fecha', { ascending: false })
 
       if (!isAdmin) {
         lq = lq.eq('vendedor_asignado', profile.id)
@@ -44,7 +33,8 @@ export default function DashboardPage() {
 
       const [lr, ir] = await Promise.all([lq, iq])
       setLeads(lr.data || [])
-      setInteracciones(ir.data || [])
+      // Limitar a 10 solo para el feed de actividad reciente en la UI
+      setInteracciones((ir.data || []).slice(0, 10))
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }
@@ -63,7 +53,7 @@ export default function DashboardPage() {
 
   const pieData = useMemo(() =>
     Object.entries(leads.reduce((a, l) => { a[l.estado] = (a[l.estado] || 0) + 1; return a }, {}))
-      .map(([k, v]) => ({ name: STATUS_LABELS[k], value: v, color: STATUS_COLORS[k] })),
+      .map(([k, v]) => ({ name: LEAD_STATUS_LABELS[k], value: v, color: LEAD_STATUS_COLORS[k] })),
     [leads])
 
   const followups = useMemo(() => {
