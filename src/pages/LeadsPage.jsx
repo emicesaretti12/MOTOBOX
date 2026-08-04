@@ -253,13 +253,13 @@ export default function LeadsPage() {
                   <div className="form-group">
                     <label className="form-label">Origen</label>
                     <select className="form-input" value={formData.origen} onChange={e => setFormData({ ...formData, origen: e.target.value })}>
-                      {Object.entries(ORIGEN_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      {Object.entries(LEAD_ORIGEN_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Estado</label>
                     <select className="form-input" value={formData.estado} onChange={e => setFormData({ ...formData, estado: e.target.value })}>
-                      {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      {Object.entries(LEAD_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
                   </div>
                 </div>
