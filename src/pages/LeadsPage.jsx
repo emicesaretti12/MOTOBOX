@@ -1,527 +1,280 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { Plus, Search, X, LayoutGrid, List, Download, Phone, MessageCircle } from 'lucide-react'
 
-const STATUS_LABELS = { 
-  nuevo: 'Nuevo', 
-  contactado: 'Contactado', 
-  en_negociacion: 'En Negociación', 
-  venta_cerrada: 'Venta Cerrada', 
-  perdido: 'Perdido' 
-}
-
-const ORIGEN_LABELS = { 
-  whatsapp: 'WhatsApp', 
-  facebook: 'Facebook', 
-  instagram: 'Instagram', 
-  presencial: 'Presencial', 
-  referido: 'Referido', 
-  otro: 'Otro' 
-}
-
+const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
+const ORIGEN_LABELS = { whatsapp: 'WhatsApp', facebook: 'Facebook', instagram: 'Instagram', presencial: 'Presencial', referido: 'Referido', otro: 'Otro' }
 const STATUS_ORDER = ['nuevo', 'contactado', 'en_negociacion', 'venta_cerrada', 'perdido']
+const EMPTY_LEAD = { nombre: '', telefono: '', email: '', modelo_interes: '', origen: 'presencial', estado: 'nuevo', vendedor_asignado: '', presupuesto_estimado: '', fecha_agenda: '', notas: '' }
 
-const getWaLink = (ph) => { 
-  if(!ph) return null; 
-  const c = ph.replace(/\D/g,''); 
-  return 'https://wa.me/' + (c.startsWith('54') ? c : '54'+c) 
-}
-
-const formatPresupuesto = (v) => v ? '$' + Number(v).toLocaleString('es-AR') : '-'
+function getWaLink(ph) { if (!ph) return null; const c = ph.replace(/\D/g, ''); return 'https://wa.me/' + (c.startsWith('54') ? c : '54' + c) }
+function fmt$(v) { return v ? '$' + Number(v).toLocaleString('es-AR') : '-' }
 
 export default function LeadsPage() {
-  const { profile } = useAuth()
-  const { showToast } = useToast()
   const navigate = useNavigate()
-
+  const { profile, isAdmin } = useAuth()
+  const { addToast } = useToast()
   const [leads, setLeads] = useState([])
-  const [vendors, setVendors] = useState([])
+  const [vendedores, setVendedores] = useState([])
   const [loading, setLoading] = useState(true)
-
-  // View state
   const [viewMode, setViewMode] = useState('table')
-
-  // Filter states
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [origenFilter, setOrigenFilter] = useState('')
-  const [vendorFilter, setVendorFilter] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-
-  // Modal states
+  const [filterEstado, setFilterEstado] = useState('')
+  const [filterOrigen, setFilterOrigen] = useState('')
+  const [filterVendedor, setFilterVendedor] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingLead, setEditingLead] = useState(null)
-  const [formData, setFormData] = useState({
-    nombre: '',
-    telefono: '',
-    email: '',
-    modelo_interes: '',
-    origen: 'whatsapp',
-    estado: 'nuevo',
-    vendedor_asignado: '',
-    presupuesto_estimado: '',
-    fecha_agenda: '',
-    notas: ''
-  })
+  const [formData, setFormData] = useState(EMPTY_LEAD)
   const [saving, setSaving] = useState(false)
-
-  const isAdmin = profile?.role === 'admin'
 
   useEffect(() => {
     fetchLeads()
-    if (isAdmin) {
-      fetchVendors()
-    }
-  }, [profile])
-
-  useEffect(() => {
-    const handleOpenNewLead = () => {
-      openModal()
-    }
-    window.addEventListener('open-new-lead', handleOpenNewLead)
-    return () => window.removeEventListener('open-new-lead', handleOpenNewLead)
+    if (isAdmin) supabase.from('profiles').select('id, full_name').order('full_name').then(({ data }) => setVendedores(data || []))
+    const h = () => openModal()
+    window.addEventListener('open-new-lead', h)
+    return () => window.removeEventListener('open-new-lead', h)
   }, [])
 
-  const fetchLeads = async () => {
+  async function fetchLeads() {
     try {
-      setLoading(true)
-      let query = supabase
-        .from('leads')
-        .select('*, vendedor:profiles!vendedor_asignado(id, full_name)')
-        .order('created_at', { ascending: false })
-
-      if (profile?.role === 'empleado') {
-        query = query.eq('vendedor_asignado', profile.id)
-      }
-
-      const { data, error } = await query
+      let q = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(id, full_name)').order('created_at', { ascending: false })
+      if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
+      const { data, error } = await q
       if (error) throw error
       setLeads(data || [])
-    } catch (err) {
-      console.error(err)
-      showToast('Error al cargar leads', 'error')
-    } finally {
-      setLoading(false)
-    }
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
   }
 
-  const fetchVendors = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, role')
-        .order('full_name')
-      if (error) throw error
-      setVendors(data || [])
-    } catch (err) {
-      console.error(err)
-    }
-  }
+  const filtered = useMemo(() => leads.filter(l => {
+    if (search && !l.nombre?.toLowerCase().includes(search.toLowerCase()) && !l.telefono?.includes(search)) return false
+    if (filterEstado && l.estado !== filterEstado) return false
+    if (filterOrigen && l.origen !== filterOrigen) return false
+    if (filterVendedor && l.vendedor_asignado !== filterVendedor) return false
+    return true
+  }), [leads, search, filterEstado, filterOrigen, filterVendedor])
 
-  const handleExportCSV = () => {
-    if (filteredLeads.length === 0) return
-    const headers = ['Nombre', 'Teléfono', 'Email', 'Modelo', 'Origen', 'Estado', 'Presupuesto', 'Vendedor', 'Fecha']
-    const csvData = filteredLeads.map(l => [
-      l.nombre,
-      l.telefono || '',
-      l.email || '',
-      l.modelo_interes || '',
-      ORIGEN_LABELS[l.origen] || l.origen,
-      STATUS_LABELS[l.estado] || l.estado,
-      l.presupuesto_estimado || '',
-      l.vendedor?.full_name || '',
-      new Date(l.created_at).toLocaleDateString()
-    ])
-
-    const csvContent = [
-      headers.join(','),
-      ...csvData.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    ].join('\n')
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.setAttribute('download', 'leads.csv')
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
-
-  const openModal = (lead = null) => {
+  function openModal(lead) {
     if (lead) {
       setEditingLead(lead)
-      setFormData({
-        nombre: lead.nombre || '',
-        telefono: lead.telefono || '',
-        email: lead.email || '',
-        modelo_interes: lead.modelo_interes || '',
-        origen: lead.origen || 'whatsapp',
-        estado: lead.estado || 'nuevo',
-        vendedor_asignado: lead.vendedor_asignado || '',
-        presupuesto_estimado: lead.presupuesto_estimado || '',
-        fecha_agenda: lead.fecha_agenda ? lead.fecha_agenda.slice(0, 16) : '',
-        notas: lead.notas || ''
-      })
+      setFormData({ nombre: lead.nombre || '', telefono: lead.telefono || '', email: lead.email || '', modelo_interes: lead.modelo_interes || '', origen: lead.origen || 'presencial', estado: lead.estado || 'nuevo', vendedor_asignado: lead.vendedor_asignado || '', presupuesto_estimado: lead.presupuesto_estimado || '', fecha_agenda: lead.fecha_agenda ? lead.fecha_agenda.slice(0, 16) : '', notas: lead.notas || '' })
     } else {
       setEditingLead(null)
-      setFormData({
-        nombre: '',
-        telefono: '',
-        email: '',
-        modelo_interes: '',
-        origen: 'whatsapp',
-        estado: 'nuevo',
-        vendedor_asignado: isAdmin ? '' : profile?.id,
-        presupuesto_estimado: '',
-        fecha_agenda: '',
-        notas: ''
-      })
+      setFormData({ ...EMPTY_LEAD, vendedor_asignado: isAdmin ? '' : profile?.id || '' })
     }
     setIsModalOpen(true)
   }
 
-  const closeModal = () => {
-    setIsModalOpen(false)
-    setEditingLead(null)
-  }
-
-  const handleSave = async (e) => {
+  async function handleSave(e) {
     e.preventDefault()
     setSaving(true)
     try {
-      const payload = {
-        ...formData,
-        vendedor_asignado: formData.vendedor_asignado || null,
-        presupuesto_estimado: formData.presupuesto_estimado ? Number(formData.presupuesto_estimado) : null
-      }
-
+      const payload = { ...formData, vendedor_asignado: formData.vendedor_asignado || null, presupuesto_estimado: formData.presupuesto_estimado ? Number(formData.presupuesto_estimado) : null, fecha_agenda: formData.fecha_agenda || null }
       if (editingLead) {
         const { error } = await supabase.from('leads').update(payload).eq('id', editingLead.id)
         if (error) throw error
-        showToast('Lead actualizado', 'success')
+        addToast('Lead actualizado', 'success')
       } else {
         const { error } = await supabase.from('leads').insert([payload])
         if (error) throw error
-        showToast('Lead creado', 'success')
+        addToast('Lead creado', 'success')
       }
-      closeModal()
+      setIsModalOpen(false)
       fetchLeads()
-    } catch (err) {
-      console.error(err)
-      showToast('Error al guardar lead', 'error')
-    } finally {
-      setSaving(false)
-    }
+    } catch (e) { addToast('Error al guardar', 'error'); console.error(e) }
+    finally { setSaving(false) }
   }
 
-  const filteredLeads = leads.filter(l => {
-    const sTerm = search.toLowerCase()
-    const matchesSearch = !search || 
-      (l.nombre && l.nombre.toLowerCase().includes(sTerm)) ||
-      (l.telefono && l.telefono.includes(sTerm))
-    const matchesStatus = !statusFilter || l.estado === statusFilter
-    const matchesOrigen = !origenFilter || l.origen === origenFilter
-    const matchesVendor = !vendorFilter || l.vendedor_asignado === vendorFilter
-    const matchesDateFrom = !dateFrom || new Date(l.created_at) >= new Date(dateFrom)
-    const matchesDateTo = !dateTo || new Date(l.created_at) <= new Date(dateTo + 'T23:59:59')
-    
-    return matchesSearch && matchesStatus && matchesOrigen && matchesVendor && matchesDateFrom && matchesDateTo
-  })
+  function exportCSV() {
+    const rows = [['Nombre', 'Teléfono', 'Email', 'Modelo', 'Origen', 'Estado', 'Presupuesto', 'Vendedor', 'Cita', 'Creado']]
+    filtered.forEach(l => rows.push([l.nombre, l.telefono || '', l.email || '', l.modelo_interes || '', ORIGEN_LABELS[l.origen] || l.origen, STATUS_LABELS[l.estado], l.presupuesto_estimado || '', l.vendedor?.full_name || '', l.fecha_agenda || '', new Date(l.created_at).toLocaleDateString('es-AR')]))
+    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `leads_${new Date().toISOString().slice(0, 10)}.csv`; a.click()
+    addToast('CSV exportado', 'success')
+  }
+
+  if (loading) return <div className="spinner-overlay"><div className="spinner" /></div>
 
   return (
-    <>
-      <div className="page-header">
-        <h1 className="page-title">Leads</h1>
-        <div className="page-actions">
-          <button className="btn btn-secondary" onClick={handleExportCSV}>
-            <Download className="icon" /> Exportar
-          </button>
-          <button className="btn btn-primary" onClick={() => openModal()}>
-            <Plus className="icon" /> Nuevo Lead
-          </button>
-        </div>
-      </div>
-
+    <div>
+      {/* Filters */}
       <div className="filters-bar">
         <div className="search-input-wrap">
-          <Search className="icon" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre o teléfono..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+          <Search size={16} />
+          <input placeholder="Buscar por nombre o teléfono..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        
-        <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="">Estado (Todos)</option>
+        <select className="filter-select" value={filterEstado} onChange={e => setFilterEstado(e.target.value)}>
+          <option value="">Todos los estados</option>
           {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
-        
-        <select className="filter-select" value={origenFilter} onChange={e => setOrigenFilter(e.target.value)}>
-          <option value="">Origen (Todos)</option>
+        <select className="filter-select" value={filterOrigen} onChange={e => setFilterOrigen(e.target.value)}>
+          <option value="">Todo origen</option>
           {Object.entries(ORIGEN_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
-
         {isAdmin && (
-          <select className="filter-select" value={vendorFilter} onChange={e => setVendorFilter(e.target.value)}>
-            <option value="">Vendedor (Todos)</option>
-            {vendors.map(v => <option key={v.id} value={v.id}>{v.full_name}</option>)}
+          <select className="filter-select" value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)}>
+            <option value="">Todos los vendedores</option>
+            {vendedores.map(v => <option key={v.id} value={v.id}>{v.full_name}</option>)}
           </select>
         )}
-
-        <input type="date" className="filter-date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-        <input type="date" className="filter-date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-
         <div className="view-toggle">
-          <button 
-            className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
-            onClick={() => setViewMode('table')}
-            title="Tabla"
-          >
-            <List className="icon" />
-          </button>
-          <button 
-            className={`view-toggle-btn ${viewMode === 'kanban' ? 'active' : ''}`}
-            onClick={() => setViewMode('kanban')}
-            title="Kanban"
-          >
-            <LayoutGrid className="icon" />
-          </button>
+          <button className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`} onClick={() => setViewMode('table')}><List size={14} /> Tabla</button>
+          <button className={`view-toggle-btn ${viewMode === 'kanban' ? 'active' : ''}`} onClick={() => setViewMode('kanban')}><LayoutGrid size={14} /> Kanban</button>
         </div>
+        <button className="btn btn-secondary btn-sm" onClick={exportCSV}><Download size={14} /> CSV</button>
+        <span className="results-count">{filtered.length} leads</span>
       </div>
 
-      <div className="results-count">
-        {filteredLeads.length} {filteredLeads.length === 1 ? 'resultado' : 'resultados'}
-      </div>
-
-      {loading ? (
-        <div className="spinner-overlay">
-          <div className="spinner"></div>
-        </div>
-      ) : filteredLeads.length === 0 ? (
-        <div className="empty-state">
-          <p>No se encontraron leads con los filtros actuales.</p>
-        </div>
-      ) : (
-        viewMode === 'table' ? (
-          <div className="card">
+      {/* TABLE VIEW */}
+      {viewMode === 'table' && (
+        <div className="card">
+          <div className="card-body-flush">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Nombre</th>
-                  <th>Teléfono</th>
-                  <th>Modelo</th>
-                  <th>Origen</th>
-                  <th>Estado</th>
-                  <th>Presupuesto</th>
-                  {isAdmin && <th>Vendedor</th>}
-                  <th>Fecha</th>
-                  <th>Acciones</th>
+                  <th>Nombre</th><th>Teléfono</th><th>Modelo</th><th>Origen</th><th>Estado</th><th>Presupuesto</th>
+                  {isAdmin && <th>Vendedor</th>}<th>Cita</th><th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredLeads.map(lead => (
-                  <tr key={lead.id} onClick={() => navigate(`/leads/${lead.id}`)} style={{ cursor: 'pointer' }}>
-                    <td className="table-cell-primary">{lead.nombre}</td>
-                    <td className="table-cell-secondary">{lead.telefono || '-'}</td>
-                    <td className="table-cell-secondary">{lead.modelo_interes || '-'}</td>
-                    <td className="table-cell-secondary">{ORIGEN_LABELS[lead.origen] || lead.origen}</td>
+                {filtered.length === 0 ? (
+                  <tr><td colSpan={isAdmin ? 9 : 8}><div className="empty-state"><p>No se encontraron leads</p></div></td></tr>
+                ) : filtered.map(l => (
+                  <tr key={l.id} className="clickable" onClick={() => navigate(`/leads/${l.id}`)}>
+                    <td className="table-cell-primary">{l.nombre}</td>
+                    <td>{l.telefono || '-'}</td>
+                    <td>{l.modelo_interes || '-'}</td>
+                    <td>{ORIGEN_LABELS[l.origen] || l.origen}</td>
+                    <td><span className={`badge badge-${l.estado}`}>{STATUS_LABELS[l.estado]}</span></td>
+                    <td>{fmt$(l.presupuesto_estimado)}</td>
+                    {isAdmin && <td className="table-cell-secondary">{l.vendedor?.full_name || '-'}</td>}
+                    <td className="table-cell-secondary">{l.fecha_agenda ? new Date(l.fecha_agenda).toLocaleDateString('es-AR') : '-'}</td>
                     <td>
-                      <span className={`badge badge-${lead.estado}`}>
-                        {STATUS_LABELS[lead.estado] || lead.estado}
-                      </span>
-                    </td>
-                    <td className="table-cell-secondary">{formatPresupuesto(lead.presupuesto_estimado)}</td>
-                    {isAdmin && <td className="table-cell-secondary">{lead.vendedor?.full_name || '-'}</td>}
-                    <td className="table-cell-secondary">{new Date(lead.created_at).toLocaleDateString()}</td>
-                    <td className="table-actions" onClick={e => e.stopPropagation()}>
-                      {lead.telefono && (
-                        <>
-                          <a href={getWaLink(lead.telefono)} target="_blank" rel="noopener noreferrer" className="btn-icon">
-                            <MessageCircle className="icon" />
-                          </a>
-                          <a href={`tel:${lead.telefono}`} className="btn-icon">
-                            <Phone className="icon" />
-                          </a>
-                        </>
-                      )}
+                      <div className="table-actions" onClick={e => e.stopPropagation()}>
+                        {l.telefono && getWaLink(l.telefono) && <a href={getWaLink(l.telefono)} target="_blank" rel="noopener" className="btn-icon whatsapp"><MessageCircle size={16} /></a>}
+                        {l.telefono && <a href={`tel:${l.telefono}`} className="btn-icon phone"><Phone size={16} /></a>}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        ) : (
-          <div className="kanban-board">
-            {STATUS_ORDER.map(status => (
+        </div>
+      )}
+
+      {/* KANBAN VIEW */}
+      {viewMode === 'kanban' && (
+        <div className="kanban-board">
+          {STATUS_ORDER.map(status => {
+            const items = filtered.filter(l => l.estado === status)
+            return (
               <div key={status} className="kanban-column" data-status={status}>
                 <div className="kanban-column-header">
-                  <h3 className="kanban-column-title">{STATUS_LABELS[status]}</h3>
-                  <span className="kanban-column-count">
-                    {filteredLeads.filter(l => l.estado === status).length}
-                  </span>
+                  <span className="kanban-column-title">{STATUS_LABELS[status]}</span>
+                  <span className="kanban-column-count">{items.length}</span>
                 </div>
                 <div className="kanban-cards">
-                  {filteredLeads.filter(l => l.estado === status).map(lead => (
-                    <div key={lead.id} className="kanban-card" onClick={() => navigate(`/leads/${lead.id}`)}>
-                      <div className="kanban-card-name">{lead.nombre}</div>
-                      {lead.modelo_interes && <div className="kanban-card-model">{lead.modelo_interes}</div>}
-                      <div className="kanban-card-meta">
-                        {lead.telefono && <span>{lead.telefono}</span>}
-                      </div>
+                  {items.map(l => (
+                    <div key={l.id} className="kanban-card" onClick={() => navigate(`/leads/${l.id}`)}>
+                      <div className="kanban-card-name">{l.nombre}</div>
+                      {l.modelo_interes && <div className="kanban-card-model">{l.modelo_interes}</div>}
+                      {l.telefono && <div className="kanban-card-meta"><Phone size={11} /> {l.telefono}</div>}
+                      {l.fecha_agenda && <div className="kanban-card-meta">📅 {new Date(l.fecha_agenda).toLocaleDateString('es-AR')}</div>}
                       <div className="kanban-card-footer">
-                        {lead.presupuesto_estimado && (
-                          <span className="kanban-card-budget">{formatPresupuesto(lead.presupuesto_estimado)}</span>
-                        )}
-                        {isAdmin && lead.vendedor && (
-                          <span className="kanban-card-vendor">{lead.vendedor.full_name}</span>
-                        )}
+                        <span className="kanban-card-budget">{fmt$(l.presupuesto_estimado)}</span>
+                        {isAdmin && <span className="kanban-card-vendor">{l.vendedor?.full_name || ''}</span>}
                       </div>
                     </div>
                   ))}
+                  {items.length === 0 && <div className="empty-state"><p>Vacío</p></div>}
                 </div>
               </div>
-            ))}
-          </div>
-        )
+            )
+          })}
+        </div>
       )}
 
+      {/* MODAL */}
       {isModalOpen && (
-        <div className="modal-overlay" onClick={closeModal}>
+        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{editingLead ? 'Editar Lead' : 'Nuevo Lead'}</h2>
-              <button className="modal-close" onClick={closeModal}><X className="icon" /></button>
+              <h3>{editingLead ? 'Editar Lead' : 'Nuevo Lead'}</h3>
+              <button className="modal-close" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
             </div>
-            <div className="modal-body">
-              <form id="lead-form" onSubmit={handleSave}>
-                <div className="form-group">
-                  <label className="form-label">Nombre *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    required
-                    value={formData.nombre}
-                    onChange={e => setFormData({ ...formData, nombre: e.target.value })}
-                  />
-                </div>
-                
+            <form onSubmit={handleSave}>
+              <div className="modal-body">
                 <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Nombre *</label>
+                    <input className="form-input" value={formData.nombre} onChange={e => setFormData({ ...formData, nombre: e.target.value })} required />
+                  </div>
                   <div className="form-group">
                     <label className="form-label">Teléfono</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={formData.telefono}
-                      onChange={e => setFormData({ ...formData, telefono: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Email</label>
-                    <input
-                      type="email"
-                      className="form-input"
-                      value={formData.email}
-                      onChange={e => setFormData({ ...formData, email: e.target.value })}
-                    />
+                    <input className="form-input" value={formData.telefono} onChange={e => setFormData({ ...formData, telefono: e.target.value })} />
                   </div>
                 </div>
-
-                <div className="form-group">
-                  <label className="form-label">Modelo de Interés</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formData.modelo_interes}
-                    onChange={e => setFormData({ ...formData, modelo_interes: e.target.value })}
-                  />
-                </div>
-
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Origen *</label>
-                    <select
-                      className="form-input"
-                      required
-                      value={formData.origen}
-                      onChange={e => setFormData({ ...formData, origen: e.target.value })}
-                    >
+                    <label className="form-label">Email</label>
+                    <input className="form-input" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Modelo de Interés</label>
+                    <input className="form-input" value={formData.modelo_interes} onChange={e => setFormData({ ...formData, modelo_interes: e.target.value })} />
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Origen</label>
+                    <select className="form-input" value={formData.origen} onChange={e => setFormData({ ...formData, origen: e.target.value })}>
                       {Object.entries(ORIGEN_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Estado *</label>
-                    <select
-                      className="form-input"
-                      required
-                      value={formData.estado}
-                      onChange={e => setFormData({ ...formData, estado: e.target.value })}
-                    >
+                    <label className="form-label">Estado</label>
+                    <select className="form-input" value={formData.estado} onChange={e => setFormData({ ...formData, estado: e.target.value })}>
                       {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
                   </div>
                 </div>
-
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Presupuesto Estimado ($)</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      value={formData.presupuesto_estimado}
-                      onChange={e => setFormData({ ...formData, presupuesto_estimado: e.target.value })}
-                    />
+                    <label className="form-label">Presupuesto</label>
+                    <input className="form-input" type="number" value={formData.presupuesto_estimado} onChange={e => setFormData({ ...formData, presupuesto_estimado: e.target.value })} />
                   </div>
                   {isAdmin && (
                     <div className="form-group">
-                      <label className="form-label">Vendedor Asignado</label>
-                      <select
-                        className="form-input"
-                        value={formData.vendedor_asignado}
-                        onChange={e => setFormData({ ...formData, vendedor_asignado: e.target.value })}
-                      >
+                      <label className="form-label">Vendedor</label>
+                      <select className="form-input" value={formData.vendedor_asignado} onChange={e => setFormData({ ...formData, vendedor_asignado: e.target.value })}>
                         <option value="">Sin asignar</option>
-                        {vendors.map(v => <option key={v.id} value={v.id}>{v.full_name}</option>)}
+                        {vendedores.map(v => <option key={v.id} value={v.id}>{v.full_name}</option>)}
                       </select>
                     </div>
                   )}
                 </div>
-
                 <div className="form-group">
                   <label className="form-label">Fecha y Hora de Cita</label>
-                  <input
-                    className="form-input"
-                    type="datetime-local"
-                    value={formData.fecha_agenda}
-                    onChange={e => setFormData({ ...formData, fecha_agenda: e.target.value })}
-                  />
+                  <input className="form-input" type="datetime-local" value={formData.fecha_agenda} onChange={e => setFormData({ ...formData, fecha_agenda: e.target.value })} />
                 </div>
-
                 <div className="form-group">
                   <label className="form-label">Notas</label>
-                  <textarea
-                    className="form-input"
-                    rows="3"
-                    value={formData.notas}
-                    onChange={e => setFormData({ ...formData, notas: e.target.value })}
-                  ></textarea>
+                  <textarea className="form-input" rows="3" value={formData.notas} onChange={e => setFormData({ ...formData, notas: e.target.value })}></textarea>
                 </div>
-              </form>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={closeModal} disabled={saving}>Cancelar</button>
-              <button type="submit" form="lead-form" className="btn btn-primary" disabled={saving}>
-                {saving ? 'Guardando...' : 'Guardar Lead'}
-              </button>
-            </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Guardando...' : 'Guardar Lead'}</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
-    </>
+    </div>
   )
 }
