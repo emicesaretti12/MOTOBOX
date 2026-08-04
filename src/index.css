@@ -6,23 +6,23 @@
 /* === VARIABLES === */
 :root {
   /* Brand */
-  --primary: #DC2626;
-  --primary-hover: #B91C1C;
-  --primary-light: rgba(220, 38, 38, 0.08);
-  --primary-alpha: rgba(220, 38, 38, 0.12);
+  --primary: #007AFF; /* Apple Blue */
+  --primary-hover: #0056B3;
+  --primary-light: rgba(0, 122, 255, 0.08);
+  --primary-alpha: rgba(0, 122, 255, 0.12);
 
   /* Neutrals */
-  --gray-50: #FAFAFA;
-  --gray-100: #F4F4F5;
-  --gray-200: #E4E4E7;
-  --gray-300: #D4D4D8;
-  --gray-400: #A1A1AA;
-  --gray-500: #71717A;
-  --gray-600: #52525B;
-  --gray-700: #3F3F46;
-  --gray-800: #27272A;
-  --gray-900: #18181B;
-  --gray-950: #09090B;
+  --gray-50: #FFFFFF; /* Más blanco */
+  --gray-100: #F5F5F7;
+  --gray-200: #EBEBF0;
+  --gray-300: #D1D1D6;
+  --gray-400: #AEAEB2;
+  --gray-500: #8E8E93;
+  --gray-600: #636366;
+  --gray-700: #48484A;
+  --gray-800: #3A3A3C;
+  --gray-900: #1C1C1E;
+  --gray-950: #000000; /* Sidebar oscuro */
   --white: #FFFFFF;
 
   /* Semantic */
@@ -36,11 +36,11 @@
   --purple-light: rgba(124, 58, 237, 0.08);
 
   /* Shadows */
-  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
-  --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.08), 0 8px 10px -6px rgba(0,0,0,0.04);
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.02);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.06), 0 4px 6px -4px rgba(0,0,0,0.02);
+  --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01);
 
   /* Layout */
   --sidebar-width: 260px;
@@ -76,7 +76,7 @@ html {
 body {
   font-family: var(--font);
   color: var(--gray-900);
-  background: var(--gray-50);
+  background: var(--gray-100); /* Fondo más claro */
   line-height: 1.5;
   overflow-x: hidden;
 }
@@ -180,7 +180,7 @@ h4 { font-size: 0.875rem; font-weight: 650; }
 }
 
 .sidebar-brand h2 span {
-  color: var(--primary);
+  color: var(--primary); /* Mantener el color primario para el logo */
 }
 
 .sidebar-role {
@@ -255,7 +255,7 @@ h4 { font-size: 0.875rem; font-weight: 650; }
   width: 34px;
   height: 34px;
   border-radius: var(--radius-full);
-  background: var(--primary);
+  background: var(--primary); /* Mantener el color primario para el avatar */
   display: flex;
   align-items: center;
   justify-content: center;

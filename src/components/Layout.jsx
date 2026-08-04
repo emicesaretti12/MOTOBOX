@@ -12,6 +12,9 @@ import {
   Settings,
   Calendar,
   Activity,
+  Package,
+  DollarSign,
+  Briefcase,
 } from 'lucide-react'
 
 export default function Layout() {
@@ -27,7 +30,10 @@ export default function Layout() {
     if (path === '/agenda') return 'Agenda'
     if (path === '/monitor') return 'Monitor de Vendedores'
     if (path === '/usuarios') return 'Gestión de Usuarios'
-    if (path === '/perfil') return 'Mi Perfil'
+        if (path === '/perfil') return 'Mi Perfil'
+    if (path === '/inventario') return 'Gestión de Inventario'
+    if (path === '/ventas') return 'Gestión de Ventas'
+    if (path === '/clientes') return 'Gestión de Clientes'
     return 'MotoBox CRM'
   }
 
@@ -77,6 +83,33 @@ export default function Layout() {
 
         <nav className="sidebar-nav">
           <span className="sidebar-section-label">Principal</span>
+
+          <NavLink
+            to="/inventario"
+            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            <Package size={18} />
+            Inventario
+          </NavLink>
+
+          <NavLink
+            to="/ventas"
+            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            <DollarSign size={18} />
+            Ventas
+          </NavLink>
+
+          <NavLink
+            to="/clientes"
+            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            <Briefcase size={18} />
+            Clientes
+          </NavLink>
 
           <NavLink
             to="/" end

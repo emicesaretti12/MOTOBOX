@@ -126,3 +126,18 @@ export const UI_CONFIG = {
   MODAL_ANIMATION_DURATION: 300,
   DEBOUNCE_DELAY: 300
 }
+
+// Estados de inventario
+export const INVENTORY_STATUS_LABELS = {
+  disponible: 'Disponible',
+  vendido: 'Vendido',
+  reservado: 'Reservado',
+  en_reparacion: 'En Reparación',
+};
+
+export const INVENTORY_STATUS_COLORS = {
+  disponible: '#16A34A', // Verde
+  vendido: '#DC2626',    // Rojo
+  reservado: '#D97706',   // Naranja
+  en_reparacion: '#2563EB', // Azul
+};
