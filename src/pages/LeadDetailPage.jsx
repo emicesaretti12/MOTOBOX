@@ -74,6 +74,15 @@ export default function LeadDetailPage() {
           .eq('id', id)
           
         if (error) throw error
+
+        // Track status change
+        await supabase.from('historial_cambios').insert({
+          lead_id: id,
+          usuario_id: user.id,
+          campo: 'Estado',
+          valor_anterior: STATUS_LABELS[lead.estado] || lead.estado,
+          valor_nuevo: STATUS_LABELS[newStatus] || newStatus
+        })
         
         addToast('Estado actualizado correctamente', 'success')
         fetchLeadData()
@@ -88,19 +97,48 @@ export default function LeadDetailPage() {
     e.preventDefault()
     try {
       const updates = { ...editFormData }
-      // format numbers if needed, ensure budget is number
       if (updates.presupuesto_estimado) {
         updates.presupuesto_estimado = Number(updates.presupuesto_estimado)
       } else {
         updates.presupuesto_estimado = null
       }
-      
+      if (!updates.fecha_agenda) {
+        updates.fecha_agenda = null
+      }
+
+      // Track changes for audit history
+      const changes = []
+      const fieldLabels = {
+        nombre: 'Nombre', telefono: 'Teléfono', email: 'Email',
+        modelo_interes: 'Modelo', origen: 'Origen', estado: 'Estado',
+        vendedor_asignado: 'Vendedor', presupuesto_estimado: 'Presupuesto',
+        fecha_agenda: 'Fecha Agenda', notas: 'Notas'
+      }
+      for (const key of Object.keys(fieldLabels)) {
+        const oldVal = String(lead[key] || '')
+        const newVal = String(updates[key] || '')
+        if (oldVal !== newVal) {
+          changes.push({
+            lead_id: id,
+            usuario_id: user.id,
+            campo: fieldLabels[key] || key,
+            valor_anterior: oldVal || null,
+            valor_nuevo: newVal || null
+          })
+        }
+      }
+
       const { error } = await supabase
         .from('leads')
         .update(updates)
         .eq('id', id)
         
       if (error) throw error
+
+      // Save change history
+      if (changes.length > 0) {
+        await supabase.from('historial_cambios').insert(changes)
+      }
       
       addToast('Lead actualizado correctamente', 'success')
       setShowEditModal(false)
