@@ -3,444 +3,469 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { ArrowLeft, Plus, X, Phone, MessageCircle, Mail, MapPin, MoreHorizontal, Edit, ExternalLink, Clock } from 'lucide-react'
+import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, MoreHorizontal, Edit, Plus, X, Check } from 'lucide-react'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const TIPO_LABELS = { llamada: 'Llamada', whatsapp: 'WhatsApp', email: 'Email', visita: 'Visita', otro: 'Otro' }
-const TIPO_ICONS = { llamada: Phone, whatsapp: MessageCircle, email: Mail, visita: MapPin, otro: MoreHorizontal }
 const PIPELINE_STEPS = ['nuevo', 'contactado', 'en_negociacion', 'venta_cerrada']
-
-function getWhatsAppLink(phone) {
-  if (!phone) return null
-  const cleaned = phone.replace(/\D/g, '')
-  const number = cleaned.startsWith('54') ? cleaned : '54' + cleaned
-  return `https://wa.me/${number}`
-}
 
 export default function LeadDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user, profile, isAdmin } = useAuth()
   const { addToast } = useToast()
-  
+
   const [lead, setLead] = useState(null)
-  const [interactions, setInteractions] = useState([])
-  const [loading, setLoading] = useState(true)
-  
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isInteractionModalOpen, setIsInteractionModalOpen] = useState(false)
-  
+  const [interacciones, setInteracciones] = useState([])
   const [vendedores, setVendedores] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  // Modals state
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showInteractionModal, setShowInteractionModal] = useState(false)
+
+  // Edit form state
+  const [editFormData, setEditFormData] = useState({})
   
-  // Edit Form State
-  const [editForm, setEditForm] = useState({
-    nombre: '', telefono: '', email: '', modelo_interes: '', origen: '', estado: '', vendedor_asignado: '', presupuesto_estimado: '', notas: ''
-  })
-  
-  // New Interaction State
-  const [interactionForm, setInteractionForm] = useState({
-    tipo: 'llamada', detalle: ''
-  })
+  // Interaction form state
+  const [interactionFormData, setInteractionFormData] = useState({ tipo: 'llamada', detalle: '' })
+
+  const fetchLeadData = async () => {
+    try {
+      setLoading(true)
+      
+      const [leadResponse, interaccionesResponse, vendedoresResponse] = await Promise.all([
+        supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(full_name)').eq('id', id).single(),
+        supabase.from('interacciones').select('*, usuario:profiles!usuario_id(full_name)').eq('lead_id', id).order('fecha', { ascending: false }),
+        isAdmin ? supabase.from('profiles').select('id, full_name').order('full_name') : Promise.resolve({ data: [] })
+      ])
+
+      if (leadResponse.error) throw leadResponse.error
+      if (interaccionesResponse.error) throw interaccionesResponse.error
+      if (isAdmin && vendedoresResponse.error) throw vendedoresResponse.error
+
+      setLead(leadResponse.data)
+      setInteracciones(interaccionesResponse.data || [])
+      if (isAdmin) {
+        setVendedores(vendedoresResponse.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching lead data:', error)
+      addToast('Error al cargar la información del lead', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    fetchLead()
-    fetchInteractions()
-    if (isAdmin) fetchVendedores()
-  }, [id])
-
-  async function fetchLead() {
-    const { data, error } = await supabase
-      .from('leads')
-      .select(`
-        *,
-        vendedor:profiles!vendedor_asignado(full_name)
-      `)
-      .eq('id', id)
-      .single()
-      
-    if (error) {
-      addToast('Error al cargar el lead', 'error')
-      console.error(error)
-      return
+    if (id) {
+      fetchLeadData()
     }
-    setLead(data)
-    setEditForm({
-      nombre: data.nombre || '',
-      telefono: data.telefono || '',
-      email: data.email || '',
-      modelo_interes: data.modelo_interes || '',
-      origen: data.origen || '',
-      estado: data.estado || '',
-      vendedor_asignado: data.vendedor_asignado || '',
-      presupuesto_estimado: data.presupuesto_estimado || '',
-      notas: data.notas || ''
-    })
-    setLoading(false)
-  }
+  }, [id, isAdmin])
 
-  async function fetchInteractions() {
-    const { data, error } = await supabase
-      .from('interacciones')
-      .select(`
-        *,
-        usuario:profiles!usuario_id(full_name)
-      `)
-      .eq('lead_id', id)
-      .order('fecha', { ascending: false })
-      
-    if (error) {
-      console.error('Error fetching interactions', error)
-      return
-    }
-    setInteractions(data)
-  }
-
-  async function fetchVendedores() {
-    const { data } = await supabase.from('profiles').select('id, full_name').order('full_name')
-    if (data) setVendedores(data)
-  }
-
-  async function handleStatusChange(newStatus) {
-    if (!lead || newStatus === lead.estado) return
-    const confirm = window.confirm(`¿Cambiar estado a ${STATUS_LABELS[newStatus]}?`)
-    if (!confirm) return
-    const { error } = await supabase.from('leads').update({ estado: newStatus, updated_at: new Date().toISOString() }).eq('id', id)
-    if (error) {
-      addToast('Error al cambiar el estado', 'error')
-    } else {
-      fetchLead()
-      addToast(`Estado cambiado a ${STATUS_LABELS[newStatus]}`, 'success')
+  const handleStatusChange = async (newStatus) => {
+    if (newStatus === lead.estado) return
+    
+    if (window.confirm(`¿Estás seguro de cambiar el estado a ${STATUS_LABELS[newStatus]}?`)) {
+      try {
+        const { error } = await supabase
+          .from('leads')
+          .update({ estado: newStatus })
+          .eq('id', id)
+          
+        if (error) throw error
+        
+        addToast('Estado actualizado correctamente', 'success')
+        fetchLeadData()
+      } catch (error) {
+        console.error('Error updating status:', error)
+        addToast('Error al actualizar el estado', 'error')
+      }
     }
   }
 
-  async function handleUpdateLead(e) {
+  const handleEditSubmit = async (e) => {
     e.preventDefault()
-    const { error } = await supabase
-      .from('leads')
-      .update({ ...editForm, updated_at: new Date().toISOString() })
-      .eq('id', id)
+    try {
+      const updates = { ...editFormData }
+      // format numbers if needed, ensure budget is number
+      if (updates.presupuesto_estimado) {
+        updates.presupuesto_estimado = Number(updates.presupuesto_estimado)
+      } else {
+        updates.presupuesto_estimado = null
+      }
       
-    if (error) {
+      const { error } = await supabase
+        .from('leads')
+        .update(updates)
+        .eq('id', id)
+        
+      if (error) throw error
+      
+      addToast('Lead actualizado correctamente', 'success')
+      setShowEditModal(false)
+      fetchLeadData()
+    } catch (error) {
+      console.error('Error updating lead:', error)
       addToast('Error al actualizar el lead', 'error')
-      return
     }
-    
-    addToast('Lead actualizado', 'success')
-    setIsEditModalOpen(false)
-    fetchLead()
   }
 
-  async function handleSaveInteraction(e) {
+  const handleInteractionSubmit = async (e) => {
     e.preventDefault()
-    
-    const newInteraction = {
-      lead_id: id,
-      usuario_id: user.id,
-      tipo: interactionForm.tipo,
-      detalle: interactionForm.detalle
-    }
-    
-    const { error } = await supabase
-      .from('interacciones')
-      .insert([newInteraction])
+    try {
+      const { error } = await supabase
+        .from('interacciones')
+        .insert([{
+          lead_id: id,
+          usuario_id: user.id,
+          tipo: interactionFormData.tipo,
+          detalle: interactionFormData.detalle
+        }])
+        
+      if (error) throw error
       
-    if (error) {
-      addToast('Error al guardar interacción', 'error')
-      return
+      let toastMsg = 'Interacción registrada'
+      
+      // Auto-update to 'contactado' if currently 'nuevo'
+      if (lead.estado === 'nuevo') {
+        const { error: updateError } = await supabase
+          .from('leads')
+          .update({ estado: 'contactado' })
+          .eq('id', id)
+          
+        if (updateError) throw updateError
+        toastMsg += ' y estado actualizado a Contactado'
+      }
+      
+      addToast(toastMsg, 'success')
+      setShowInteractionModal(false)
+      setInteractionFormData({ tipo: 'llamada', detalle: '' })
+      fetchLeadData()
+    } catch (error) {
+      console.error('Error creating interaction:', error)
+      addToast('Error al registrar la interacción', 'error')
     }
-    
-    if (lead.estado === 'nuevo') {
-      await supabase.from('leads').update({ estado: 'contactado', updated_at: new Date().toISOString() }).eq('id', id)
-      addToast('Interacción guardada y estado actualizado a Contactado', 'success')
-    } else {
-      addToast('Interacción guardada', 'success')
-    }
-    
-    setIsInteractionModalOpen(false)
-    setInteractionForm({ tipo: 'llamada', detalle: '' })
-    fetchInteractions()
-    fetchLead()
   }
 
-  if (loading) return <div className="p-8 text-center text-[var(--color-text-secondary)]">Cargando lead...</div>
-  if (!lead) return <div className="p-8 text-center text-[var(--color-text-secondary)]">Lead no encontrado</div>
+  const openEditModal = () => {
+    setEditFormData({
+      nombre: lead.nombre || '',
+      telefono: lead.telefono || '',
+      email: lead.email || '',
+      modelo_interes: lead.modelo_interes || '',
+      origen: lead.origen || '',
+      estado: lead.estado || 'nuevo',
+      vendedor_asignado: lead.vendedor_asignado || '',
+      notas: lead.notas || '',
+      presupuesto_estimado: lead.presupuesto_estimado || '',
+      fecha_agenda: lead.fecha_agenda ? lead.fecha_agenda.slice(0, 16) : ''
+    })
+    setShowEditModal(true)
+  }
+
+  const formatCurrency = (v) => {
+    if (!v) return '-'
+    return '$' + Number(v).toLocaleString('es-AR')
+  }
+
+  const formatDate = (d) => {
+    if (!d) return '-'
+    return new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
+  const getWhatsAppLink = (phone) => {
+    if (!phone) return '#'
+    let cleanPhone = phone.replace(/\D/g, '')
+    if (cleanPhone.length === 10 && !cleanPhone.startsWith('54')) {
+      cleanPhone = '549' + cleanPhone
+    } else if (!cleanPhone.startsWith('54')) {
+        cleanPhone = '54' + cleanPhone
+    }
+    return `https://wa.me/${cleanPhone}`
+  }
+
+  const getTimelineIcon = (tipo) => {
+    switch (tipo) {
+      case 'llamada': return <Phone size={16} />
+      case 'whatsapp': return <MessageCircle size={16} />
+      case 'email': return <Mail size={16} />
+      case 'visita': return <MapPin size={16} />
+      default: return <MoreHorizontal size={16} />
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="spinner-overlay">
+        <div className="spinner"></div>
+      </div>
+    )
+  }
+
+  if (!lead) {
+    return (
+      <div>
+        <button className="btn btn-ghost" onClick={() => navigate('/leads')}>
+          <ArrowLeft size={20} /> Volver
+        </button>
+        <p>No se encontró el lead.</p>
+      </div>
+    )
+  }
 
   const currentStepIndex = PIPELINE_STEPS.indexOf(lead.estado)
 
   return (
-    <div className="lead-detail-page p-6 max-w-6xl mx-auto animate-fade-in">
-      <button onClick={() => navigate('/leads')} className="btn btn-ghost mb-6 flex items-center gap-2">
-        <ArrowLeft size={18} /> Volver a Leads
-      </button>
+    <div>
+      <div className="mb-4">
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/leads')}>
+          <ArrowLeft size={16} /> Volver a Leads
+        </button>
+      </div>
 
-      {/* PIPELINE */}
-      <div className="pipeline-container card mb-6 p-6">
-        <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-4 uppercase tracking-wider">Estado del Lead</h3>
-        {lead.estado === 'perdido' ? (
-          <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center font-medium">
-            Estado: Perdido
-            <button className="ml-4 text-sm underline opacity-80 hover:opacity-100" onClick={() => handleStatusChange('nuevo')}>Reactivar</button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between w-full relative">
-            <div className="absolute top-1/2 left-0 right-0 h-1 bg-[var(--color-border)] -translate-y-1/2 z-0 rounded-full" />
-            
-            {PIPELINE_STEPS.map((step, index) => {
-              const isCompleted = index <= currentStepIndex
-              const isActive = index === currentStepIndex
-              
-              return (
-                <div key={step} className="relative z-10 flex flex-col items-center flex-1 cursor-pointer group" onClick={() => handleStatusChange(step)}>
-                  <div className={`
-                    w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300
-                    ${isCompleted ? 'bg-[var(--color-primary)] text-white shadow-[0_0_15px_var(--color-primary-alpha)]' : 'bg-[var(--color-bg-secondary)] border-2 border-[var(--color-border)] text-[var(--color-text-secondary)]'}
-                    ${isActive ? 'ring-4 ring-[var(--color-primary-alpha)]' : ''}
-                    group-hover:scale-110
-                  `}>
-                    {index + 1}
-                  </div>
-                  <span className={`
-                    mt-2 text-xs font-semibold whitespace-nowrap transition-colors
-                    ${isActive ? 'text-[var(--color-primary)]' : isCompleted ? 'text-[var(--color-text)]' : 'text-[var(--color-text-tertiary)]'}
-                  `}>
-                    {STATUS_LABELS[step]}
-                  </span>
-                </div>
-              )
-            })}
-            {/* Completed Line Overlay */}
+      <div className="pipeline">
+        {PIPELINE_STEPS.map((step, index) => {
+          const isActive = lead.estado === step
+          const isCompleted = currentStepIndex > index && lead.estado !== 'perdido'
+          
+          let stepClass = ''
+          if (isActive) stepClass = 'active'
+          else if (isCompleted) stepClass = 'completed'
+          
+          return (
             <div 
-              className="absolute top-1/2 left-0 h-1 bg-[var(--color-primary)] -translate-y-1/2 z-0 rounded-full transition-all duration-500 ease-in-out" 
-              style={{ width: `${currentStepIndex >= 0 ? (currentStepIndex / (PIPELINE_STEPS.length - 1)) * 100 : 0}%` }}
-            />
+              key={step} 
+              className={`pipeline-step ${stepClass}`}
+              onClick={() => handleStatusChange(step)}
+            >
+              <div className="pipeline-dot">
+                {isCompleted && <Check size={12} />}
+              </div>
+              <span className="pipeline-label">{STATUS_LABELS[step]}</span>
+              {index < PIPELINE_STEPS.length - 1 && (
+                <div className={`pipeline-connector ${isCompleted ? 'completed' : ''}`}></div>
+              )}
+            </div>
+          )
+        })}
+        {lead.estado === 'perdido' && (
+          <div className="pipeline-step perdido">
+            <div className="pipeline-dot">
+               <X size={12} />
+            </div>
+            <span className="pipeline-label">Perdido</span>
           </div>
         )}
       </div>
 
-      {/* QUICK ACTIONS */}
-      <div className="quick-actions-bar flex flex-wrap gap-3 mb-6">
+      <div className="quick-actions">
         <a 
-          href={getWhatsAppLink(lead.telefono) || '#'} 
+          href={getWhatsAppLink(lead.telefono)} 
           target="_blank" 
           rel="noopener noreferrer"
-          className={`btn flex-1 flex items-center justify-center gap-2 ${!lead.telefono ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+          className={`quick-action wa ${!lead.telefono ? 'disabled' : ''}`}
           onClick={(e) => !lead.telefono && e.preventDefault()}
         >
-          <MessageCircle size={18} /> WhatsApp
+          <MessageCircle size={20} />
+          <span>WhatsApp</span>
         </a>
         <a 
-          href={lead.telefono ? `tel:${lead.telefono}` : '#'}
-          className={`btn flex-1 flex items-center justify-center gap-2 ${!lead.telefono ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+          href={lead.telefono ? `tel:${lead.telefono}` : '#'} 
+          className={`quick-action call ${!lead.telefono ? 'disabled' : ''}`}
           onClick={(e) => !lead.telefono && e.preventDefault()}
         >
-          <Phone size={18} /> Llamar
+          <Phone size={20} />
+          <span>Llamar</span>
         </a>
         <a 
-          href={lead.email ? `mailto:${lead.email}` : '#'}
-          className={`btn flex-1 flex items-center justify-center gap-2 ${!lead.email ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-bg-secondary)]'}`}
+          href={lead.email ? `mailto:${lead.email}` : '#'} 
+          className={`quick-action mail ${!lead.email ? 'disabled' : ''}`}
           onClick={(e) => !lead.email && e.preventDefault()}
         >
-          <Mail size={18} /> Email
+          <Mail size={20} />
+          <span>Email</span>
         </a>
-        <button 
-          onClick={() => setIsEditModalOpen(true)}
-          className="btn flex-1 flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white"
-        >
-          <Edit size={18} /> Editar Lead
+        <button className="quick-action edit" onClick={openEditModal}>
+          <Edit size={20} />
+          <span>Editar</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* LEFT COLUMN - LEAD INFO */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="card p-6">
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2 border-b border-[var(--color-border)] pb-4">
-              Información del Lead
-            </h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider font-semibold block mb-1">Nombre</label>
-                <div className="font-medium text-lg">{lead.nombre}</div>
-              </div>
-              
-              <div>
-                <label className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider font-semibold block mb-1">Teléfono</label>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{lead.telefono || '-'}</span>
-                  {lead.telefono && <a href={getWhatsAppLink(lead.telefono)} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-400"><ExternalLink size={14} /></a>}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider font-semibold block mb-1">Email</label>
-                <div className="font-medium">{lead.email || '-'}</div>
-              </div>
-              
-              <div>
-                <label className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider font-semibold block mb-1">Modelo de Interés</label>
-                <div className="font-medium">{lead.modelo_interes || '-'}</div>
-              </div>
-              
-              <div>
-                <label className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider font-semibold block mb-1">Presupuesto Estimado</label>
-                <div className="font-medium">
-                  {lead.presupuesto_estimado ? `$${Number(lead.presupuesto_estimado).toLocaleString('es-AR')}` : '-'}
-                </div>
-              </div>
-              
-              <div>
-                <label className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider font-semibold block mb-1">Origen</label>
-                <div className="inline-flex px-2 py-1 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded text-sm capitalize">
-                  {lead.origen || '-'}
-                </div>
-              </div>
-              
-              <div>
-                <label className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider font-semibold block mb-1">Vendedor Asignado</label>
-                <div className="font-medium flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-[var(--color-primary-alpha)] flex items-center justify-center text-xs text-[var(--color-primary)] font-bold">
-                    {lead.vendedor?.full_name ? lead.vendedor.full_name.charAt(0).toUpperCase() : '?'}
-                  </div>
-                  {lead.vendedor?.full_name || 'Sin Asignar'}
-                </div>
-              </div>
-              
-              <div>
-                <label className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider font-semibold block mb-1">Notas</label>
-                <div className="text-sm text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] p-3 rounded-lg min-h-[60px] whitespace-pre-wrap">
-                  {lead.notas || 'Sin notas.'}
-                </div>
-              </div>
-              
-              <div className="pt-4 border-t border-[var(--color-border)] grid grid-cols-2 gap-4 text-xs text-[var(--color-text-tertiary)]">
-                <div>
-                  <div className="font-semibold mb-1">Creado</div>
-                  <div>{new Date(lead.created_at).toLocaleString('es-AR')}</div>
-                </div>
-                <div>
-                  <div className="font-semibold mb-1">Última Act.</div>
-                  <div>{new Date(lead.updated_at).toLocaleString('es-AR')}</div>
-                </div>
-              </div>
+      <div className="detail-grid">
+        <div className="card">
+          <div className="card-header">
+            <h3>Información del Lead</h3>
+          </div>
+          <div className="card-body">
+            <div className="detail-row">
+              <span className="detail-label">Nombre</span>
+              <span className="detail-value">{lead.nombre}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Teléfono</span>
+              <span className="detail-value">{lead.telefono || '-'}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Email</span>
+              <span className="detail-value">{lead.email || '-'}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Modelo de Interés</span>
+              <span className="detail-value">{lead.modelo_interes || '-'}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Origen</span>
+              <span className="detail-value">{lead.origen || '-'}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Presupuesto</span>
+              <span className="detail-value">{formatCurrency(lead.presupuesto_estimado)}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Vendedor</span>
+              <span className="detail-value">{lead.vendedor?.full_name || '-'}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Estado</span>
+              <span className="detail-value">
+                <span className={`badge badge-${lead.estado}`}>{STATUS_LABELS[lead.estado]}</span>
+              </span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Cita Agendada</span>
+              <span className="detail-value">{lead.fecha_agenda ? formatDate(lead.fecha_agenda) : 'Sin agendar'}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Notas</span>
+              <span className="detail-value">{lead.notas || '-'}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Creado</span>
+              <span className="detail-value">{formatDate(lead.created_at)}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Actualizado</span>
+              <span className="detail-value">{formatDate(lead.updated_at)}</span>
             </div>
           </div>
         </div>
 
-        {/* RIGHT COLUMN - INTERACTIONS */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="card p-6 h-full flex flex-col">
-            <div className="flex justify-between items-center mb-6 border-b border-[var(--color-border)] pb-4">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Clock size={20} className="text-[var(--color-primary)]" />
-                Historial de Interacciones
-                <span className="bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] text-sm px-2 py-0.5 rounded-full ml-2">
-                  {interactions.length}
-                </span>
-              </h2>
-              <button onClick={() => setIsInteractionModalOpen(true)} className="btn btn-primary btn-sm flex items-center gap-1">
-                <Plus size={16} /> Nueva Interacción
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto pr-2">
-              {interactions.length === 0 ? (
-                <div className="text-center p-12 text-[var(--color-text-secondary)] flex flex-col items-center">
-                  <MessageCircle size={48} className="opacity-20 mb-4" />
-                  <p className="font-medium">No hay interacciones registradas</p>
-                  <p className="text-sm mt-1">Registra la primera llamada o mensaje con el lead.</p>
-                </div>
-              ) : (
-                <div className="relative pl-6 border-l-2 border-[var(--color-border)] ml-3 space-y-6 pb-4">
-                  {interactions.map((interaction, i) => {
-                    const Icon = TIPO_ICONS[interaction.tipo] || MoreHorizontal
-                    return (
-                      <div key={interaction.id} className="relative">
-                        <div className="absolute -left-[35px] bg-[var(--color-surface)] border-2 border-[var(--color-border)] p-1.5 rounded-full">
-                          <Icon size={14} className="text-[var(--color-primary)]" />
-                        </div>
-                        <div className="bg-[var(--color-bg-secondary)] rounded-lg p-4 shadow-sm border border-[var(--color-border)] transition-transform hover:-translate-y-1">
-                          <div className="flex justify-between items-start mb-2">
-                            <span className="font-semibold text-[var(--color-text)] flex items-center gap-2">
-                              {TIPO_LABELS[interaction.tipo]}
-                            </span>
-                            <span className="text-xs text-[var(--color-text-tertiary)] flex items-center gap-1">
-                              <Clock size={12} />
-                              {new Date(interaction.created_at).toLocaleString('es-AR')}
-                            </span>
-                          </div>
-                          <p className="text-sm text-[var(--color-text-secondary)] whitespace-pre-wrap">{interaction.detalle}</p>
-                          <div className="mt-3 text-xs text-[var(--color-text-tertiary)] flex items-center gap-1 pt-3 border-t border-[var(--color-border)]">
-                            <span className="w-4 h-4 rounded-full bg-[var(--color-primary-alpha)] flex items-center justify-center text-[var(--color-primary)] font-bold">
-                              {interaction.usuario?.full_name ? interaction.usuario.full_name.charAt(0).toUpperCase() : '?'}
-                            </span>
-                            Registrado por {interaction.usuario?.full_name || 'Desconocido'}
-                          </div>
-                        </div>
+        <div className="card">
+          <div className="card-header">
+            <h3>Interacciones ({interacciones.length})</h3>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowInteractionModal(true)}>
+              <Plus size={16} /> Nueva Interacción
+            </button>
+          </div>
+          <div className="card-body">
+            {interacciones.length === 0 ? (
+              <p>No hay interacciones registradas.</p>
+            ) : (
+              <div className="timeline">
+                {interacciones.map((interaccion) => (
+                  <div key={interaccion.id} className="timeline-item">
+                    <div className={`timeline-icon ${interaccion.tipo}`}>
+                      {getTimelineIcon(interaccion.tipo)}
+                    </div>
+                    <div className="timeline-body">
+                      <div className="timeline-type">{TIPO_LABELS[interaccion.tipo] || interaccion.tipo}</div>
+                      {interaccion.detalle && (
+                        <div className="timeline-detail">{interaccion.detalle}</div>
+                      )}
+                      <div className="timeline-meta">
+                        {interaccion.usuario?.full_name || 'Usuario'} • {formatDate(interaccion.fecha)}
                       </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* EDIT MODAL */}
-      {isEditModalOpen && (
+      {showEditModal && (
         <div className="modal-overlay">
-          <div className="modal-content max-w-2xl w-full">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">Editar Lead</h2>
-              <button onClick={() => setIsEditModalOpen(false)} className="text-[var(--color-text-secondary)] hover:text-white">
-                <X size={24} />
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Editar Lead</h2>
+              <button className="modal-close" onClick={() => setShowEditModal(false)}>
+                <X size={20} />
               </button>
             </div>
-            
-            <form onSubmit={handleUpdateLead} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label>Nombre Completo *</label>
-                  <input type="text" className="input" required value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} />
+            <form onSubmit={handleEditSubmit}>
+              <div className="modal-body">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Nombre</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      required 
+                      value={editFormData.nombre}
+                      onChange={e => setEditFormData({...editFormData, nombre: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Teléfono</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value={editFormData.telefono}
+                      onChange={e => setEditFormData({...editFormData, telefono: e.target.value})}
+                    />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label>Teléfono</label>
-                  <input type="tel" className="input" value={editForm.telefono} onChange={e => setEditForm({...editForm, telefono: e.target.value})} />
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Email</label>
+                    <input 
+                      type="email" 
+                      className="form-input" 
+                      value={editFormData.email}
+                      onChange={e => setEditFormData({...editFormData, email: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Modelo de Interés</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value={editFormData.modelo_interes}
+                      onChange={e => setEditFormData({...editFormData, modelo_interes: e.target.value})}
+                    />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label>Email</label>
-                  <input type="email" className="input" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} />
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Origen</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value={editFormData.origen}
+                      onChange={e => setEditFormData({...editFormData, origen: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Presupuesto Estimado</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      value={editFormData.presupuesto_estimado}
+                      onChange={e => setEditFormData({...editFormData, presupuesto_estimado: e.target.value})}
+                    />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label>Modelo de Interés</label>
-                  <input type="text" className="input" value={editForm.modelo_interes} onChange={e => setEditForm({...editForm, modelo_interes: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label>Origen</label>
-                  <select className="input" value={editForm.origen} onChange={e => setEditForm({...editForm, origen: e.target.value})}>
-                    <option value="">Seleccionar...</option>
-                    <option value="whatsapp">WhatsApp</option>
-                    <option value="instagram">Instagram</option>
-                    <option value="facebook">Facebook</option>
-                    <option value="web">Sitio Web</option>
-                    <option value="showroom">Showroom</option>
-                    <option value="referido">Referido</option>
-                    <option value="otro">Otro</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Estado</label>
-                  <select className="input" required value={editForm.estado} onChange={e => setEditForm({...editForm, estado: e.target.value})}>
-                    {Object.entries(STATUS_LABELS).map(([val, label]) => (
-                      <option key={val} value={val}>{label}</option>
-                    ))}
-                  </select>
-                </div>
+                
                 {isAdmin && (
                   <div className="form-group">
-                    <label>Vendedor Asignado</label>
-                    <select className="input" value={editForm.vendedor_asignado} onChange={e => setEditForm({...editForm, vendedor_asignado: e.target.value})}>
+                    <label className="form-label">Vendedor Asignado</label>
+                    <select 
+                      className="form-input"
+                      value={editFormData.vendedor_asignado || ''}
+                      onChange={e => setEditFormData({...editFormData, vendedor_asignado: e.target.value || null})}
+                    >
                       <option value="">Sin asignar</option>
                       {vendedores.map(v => (
                         <option key={v.id} value={v.id}>{v.full_name}</option>
@@ -448,19 +473,41 @@ export default function LeadDetailPage() {
                     </select>
                   </div>
                 )}
+                
                 <div className="form-group">
-                  <label>Presupuesto Estimado ($)</label>
-                  <input type="number" className="input" value={editForm.presupuesto_estimado} onChange={e => setEditForm({...editForm, presupuesto_estimado: e.target.value})} />
+                  <label className="form-label">Estado</label>
+                  <select 
+                    className="form-input"
+                    value={editFormData.estado}
+                    onChange={e => setEditFormData({...editFormData, estado: e.target.value})}
+                  >
+                    {Object.entries(STATUS_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Fecha y Hora de Cita</label>
+                  <input
+                    className="form-input"
+                    type="datetime-local"
+                    value={editFormData.fecha_agenda || ''}
+                    onChange={e => setEditFormData({...editFormData, fecha_agenda: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Notas</label>
+                  <textarea 
+                    className="form-input" 
+                    rows="3"
+                    value={editFormData.notas}
+                    onChange={e => setEditFormData({...editFormData, notas: e.target.value})}
+                  ></textarea>
                 </div>
               </div>
-              
-              <div className="form-group">
-                <label>Notas</label>
-                <textarea className="input min-h-[100px]" value={editForm.notas} onChange={e => setEditForm({...editForm, notas: e.target.value})}></textarea>
-              </div>
-              
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setIsEditModalOpen(false)} className="btn btn-ghost">Cancelar</button>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowEditModal(false)}>Cancelar</button>
                 <button type="submit" className="btn btn-primary">Guardar Cambios</button>
               </div>
             </form>
@@ -468,48 +515,46 @@ export default function LeadDetailPage() {
         </div>
       )}
 
-      {/* NEW INTERACTION MODAL */}
-      {isInteractionModalOpen && (
+      {showInteractionModal && (
         <div className="modal-overlay">
-          <div className="modal-content max-w-lg w-full">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">Registrar Interacción</h2>
-              <button onClick={() => setIsInteractionModalOpen(false)} className="text-[var(--color-text-secondary)] hover:text-white">
-                <X size={24} />
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Nueva Interacción</h2>
+              <button className="modal-close" onClick={() => setShowInteractionModal(false)}>
+                <X size={20} />
               </button>
             </div>
-            
-            <form onSubmit={handleSaveInteraction} className="space-y-4">
-              <div className="form-group">
-                <label>Tipo de Interacción *</label>
-                <select className="input" required value={interactionForm.tipo} onChange={e => setInteractionForm({...interactionForm, tipo: e.target.value})}>
-                  {Object.entries(TIPO_LABELS).map(([val, label]) => (
-                    <option key={val} value={val}>{label}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="form-group">
-                <label>Detalle *</label>
-                <textarea 
-                  className="input min-h-[120px]" 
-                  required 
-                  placeholder="Resumen de la llamada, mensaje enviado, etc."
-                  value={interactionForm.detalle} 
-                  onChange={e => setInteractionForm({...interactionForm, detalle: e.target.value})}
-                ></textarea>
-              </div>
-              
-              {lead.estado === 'nuevo' && (
-                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm text-blue-400">
-                  <span className="font-semibold block mb-1">Nota automática:</span>
-                  El estado del lead se cambiará a <strong>Contactado</strong> al guardar esta interacción.
+            <form onSubmit={handleInteractionSubmit}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="form-label">Tipo de Interacción</label>
+                  <select 
+                    className="form-input"
+                    value={interactionFormData.tipo}
+                    onChange={e => setInteractionFormData({...interactionFormData, tipo: e.target.value})}
+                    required
+                  >
+                    {Object.entries(TIPO_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
-              
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setIsInteractionModalOpen(false)} className="btn btn-ghost">Cancelar</button>
-                <button type="submit" className="btn btn-primary">Guardar Interacción</button>
+                
+                <div className="form-group">
+                  <label className="form-label">Detalle</label>
+                  <textarea 
+                    className="form-input" 
+                    rows="4"
+                    required
+                    value={interactionFormData.detalle}
+                    onChange={e => setInteractionFormData({...interactionFormData, detalle: e.target.value})}
+                    placeholder="Describe la interacción..."
+                  ></textarea>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowInteractionModal(false)}>Cancelar</button>
+                <button type="submit" className="btn btn-primary">Registrar</button>
               </div>
             </form>
           </div>

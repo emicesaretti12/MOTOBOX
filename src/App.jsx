@@ -5,7 +5,9 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import LeadsPage from './pages/LeadsPage'
 import LeadDetailPage from './pages/LeadDetailPage'
+import AgendaPage from './pages/AgendaPage'
 import UsersPage from './pages/UsersPage'
+import VendorMonitorPage from './pages/VendorMonitorPage'
 import ProfilePage from './pages/ProfilePage'
 import Layout from './components/Layout'
 
@@ -71,7 +73,16 @@ function AppRoutes() {
         <Route index element={<DashboardPage />} />
         <Route path="leads" element={<LeadsPage />} />
         <Route path="leads/:id" element={<LeadDetailPage />} />
+        <Route path="agenda" element={<AgendaPage />} />
         <Route path="perfil" element={<ProfilePage />} />
+        <Route
+          path="monitor"
+          element={
+            <ProtectedRoute adminOnly>
+              <VendorMonitorPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="usuarios"
           element={
