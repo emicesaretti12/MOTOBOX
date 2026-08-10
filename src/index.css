@@ -2549,3 +2549,305 @@ body {
   color: var(--gray-500);
   margin-top: 2px;
 }
+
+/* ============================================
+   AGENDA - DAY STRIP
+   ============================================ */
+.agenda-strip {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.agenda-strip-day {
+  flex: 1;
+  min-width: 52px;
+  text-align: center;
+  padding: 10px 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  cursor: default;
+  transition: all 0.15s var(--ease);
+  position: relative;
+}
+
+.agenda-strip-day.today {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--white);
+}
+
+.agenda-strip-day.past { opacity: 0.5; }
+
+.agenda-strip-name {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gray-500);
+}
+
+.agenda-strip-day.today .agenda-strip-name { color: rgba(255,255,255,0.8); }
+
+.agenda-strip-num {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-top: 2px;
+  color: var(--gray-900);
+}
+
+.agenda-strip-day.today .agenda-strip-num { color: var(--white); }
+
+.agenda-strip-dots {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  background: var(--primary);
+  color: var(--white);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 4px auto 0;
+}
+
+.agenda-strip-day.today .agenda-strip-dots {
+  background: var(--white);
+  color: var(--primary);
+}
+
+/* ============================================
+   AGENDA - DAY BLOCKS
+   ============================================ */
+.agenda-days { display: flex; flex-direction: column; gap: 16px; }
+
+.agenda-day-block {
+  background: var(--white);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--gray-200);
+  overflow: hidden;
+}
+
+.agenda-day-block.today { border-color: var(--primary); border-width: 2px; }
+
+.agenda-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.agenda-day-block.today .agenda-day-header { background: rgba(220,38,38,0.03); }
+
+.agenda-day-title { display: flex; flex-direction: column; }
+
+.agenda-day-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  text-transform: capitalize;
+}
+
+.agenda-day-date { font-size: 0.6875rem; color: var(--gray-500); text-transform: capitalize; }
+
+.agenda-day-count {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--gray-400);
+}
+
+.agenda-events { padding: 4px 8px; }
+
+.agenda-event {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s var(--ease);
+  border-left: 3px solid transparent;
+}
+
+.agenda-event:hover { background: var(--gray-50); }
+
+.agenda-event-nuevo { border-left-color: #2563EB; }
+.agenda-event-contactado { border-left-color: #D97706; }
+.agenda-event-en_negociacion { border-left-color: #7C3AED; }
+.agenda-event-venta_cerrada { border-left-color: #16A34A; }
+.agenda-event-perdido { border-left-color: #71717A; }
+
+.agenda-event-time {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  min-width: 44px;
+}
+
+.agenda-event-body { flex: 1; min-width: 0; }
+
+.agenda-event-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.agenda-event-meta {
+  font-size: 0.6875rem;
+  color: var(--gray-500);
+  display: flex;
+  gap: 4px;
+}
+
+.agenda-event-actions { display: flex; gap: 4px; }
+
+.agenda-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--gray-400);
+}
+
+/* ============================================
+   INVENTORY CARD GRID
+   ============================================ */
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.inventory-card {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all 0.2s var(--ease);
+}
+
+.inventory-card:hover {
+  border-color: var(--gray-300);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  transform: translateY(-2px);
+}
+
+.inventory-card-top {
+  padding: 16px 16px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.inventory-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--gray-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gray-400);
+}
+
+.inventory-card-body { padding: 12px 16px; }
+
+.inventory-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: 6px;
+}
+
+.inventory-card-specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.inventory-spec {
+  font-size: 0.6875rem;
+  padding: 2px 8px;
+  background: var(--gray-100);
+  border-radius: 99px;
+  color: var(--gray-600);
+  font-weight: 500;
+}
+
+.inventory-card-price {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.inventory-card-actions {
+  padding: 8px 12px;
+  display: flex;
+  gap: 4px;
+  border-top: 1px solid var(--gray-100);
+}
+
+.inventory-card-actions .btn { flex: 1; justify-content: center; }
+
+/* Stats trend */
+.stat-card-trend {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.stat-card-trend.up { color: #16A34A; }
+.stat-card-trend.down { color: #DC2626; }
+.stat-card-trend.neutral { color: var(--gray-500); }
+
+/* Stat card yellow */
+.stat-card-icon.yellow {
+  background: rgba(234, 179, 8, 0.1);
+  color: #CA8A04;
+}
+
+/* Leaderboard ranks */
+.leaderboard-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  background: var(--gray-100);
+  color: var(--gray-600);
+}
+
+.leaderboard-rank.gold { background: #FEF3C7; color: #B45309; }
+.leaderboard-rank.silver { background: #F3F4F6; color: #4B5563; }
+.leaderboard-rank.bronze { background: #FED7AA; color: #C2410C; }
+
+/* Grid helper */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* Stats row override */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 640px) {
+  .inventory-grid { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .agenda-strip-day { min-width: 42px; }
+}
