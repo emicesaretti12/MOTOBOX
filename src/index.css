@@ -2406,3 +2406,146 @@ body {
   cursor: not-allowed;
   opacity: 0.7;
 }
+
+/* ============================================
+   SMART ALERTS
+   ============================================ */
+.alerts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.alert-card {
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border-left: 3px solid;
+}
+
+.alert-warning { background: rgba(217,119,6,0.04); border-left-color: #D97706; }
+.alert-danger { background: rgba(220,38,38,0.04); border-left-color: #DC2626; }
+.alert-info { background: rgba(37,99,235,0.04); border-left-color: #2563EB; }
+.alert-success { background: rgba(22,163,74,0.04); border-left-color: #16A34A; }
+
+.alert-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--gray-900);
+  margin-bottom: 8px;
+}
+
+.alert-leads { display: flex; flex-direction: column; gap: 4px; }
+
+.alert-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--gray-700);
+  cursor: pointer;
+  transition: background 0.15s var(--ease);
+}
+
+.alert-lead:hover { background: rgba(0,0,0,0.04); }
+.alert-lead-model { color: var(--gray-400); margin-left: auto; }
+
+/* ============================================
+   CONVERSION FUNNEL
+   ============================================ */
+.funnel-row {
+  margin-bottom: 12px;
+}
+
+.funnel-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.funnel-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.funnel-count {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+}
+
+.funnel-bar-track {
+  height: 22px;
+  background: var(--gray-100);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.funnel-bar {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 4px;
+}
+
+.funnel-conv {
+  font-size: 0.625rem;
+  color: var(--gray-400);
+  text-align: center;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+/* ============================================
+   WHATSAPP TEMPLATES
+   ============================================ */
+.wa-templates {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 16px;
+  animation: slideDown 0.2s var(--ease);
+}
+
+.wa-templates-title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: 10px;
+}
+
+.wa-template {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-100);
+  margin-bottom: 6px;
+  text-decoration: none;
+  transition: all 0.15s var(--ease);
+  cursor: pointer;
+}
+
+.wa-template:hover {
+  background: rgba(22, 163, 74, 0.04);
+  border-color: rgba(22, 163, 74, 0.2);
+  transform: translateX(4px);
+}
+
+.wa-template-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.wa-template-preview {
+  font-size: 0.6875rem;
+  color: var(--gray-500);
+  margin-top: 2px;
+}

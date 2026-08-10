@@ -13,6 +13,39 @@ const TIPO_ICONS = { llamada: Phone, whatsapp: MessageCircle, email: Mail, visit
 function fmt$(v) { return v ? '$' + Number(v).toLocaleString('es-AR') : '-' }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-' }
 function getWa(ph) { if (!ph) return null; const c = ph.replace(/\D/g, ''); return 'https://wa.me/' + (c.startsWith('54') ? c : '54' + c) }
+function getWaMsg(ph, msg) { const base = getWa(ph); return base ? `${base}?text=${encodeURIComponent(msg)}` : '#' }
+
+function getLeadTemp(lead, intCount) {
+  const now = Date.now()
+  const days = (now - new Date(lead.created_at).getTime()) / 86400000
+  const hasBudget = !!lead.presupuesto_estimado
+  const hasAppt = !!lead.fecha_agenda && new Date(lead.fecha_agenda) > new Date()
+  let score = 0
+  if (lead.estado === 'en_negociacion') score += 40
+  else if (lead.estado === 'contactado') score += 20
+  else if (lead.estado === 'nuevo') score += 10
+  if (hasBudget) score += 15
+  if (hasAppt) score += 20
+  if (intCount > 3) score += 15
+  else if (intCount > 0) score += 5
+  if (days < 3) score += 15
+  else if (days > 10) score -= 15
+  if (score >= 60) return { label: '🔥 Caliente', color: '#DC2626', bg: 'rgba(220,38,38,0.06)' }
+  if (score >= 30) return { label: '🟡 Tibio', color: '#D97706', bg: 'rgba(217,119,6,0.06)' }
+  return { label: '🔵 Frío', color: '#2563EB', bg: 'rgba(37,99,235,0.06)' }
+}
+
+function getTemplates(lead) {
+  const name = lead.nombre?.split(' ')[0] || ''
+  const model = lead.modelo_interes || 'la moto'
+  return [
+    { label: '👋 Primer contacto', msg: `¡Hola ${name}! Soy del equipo de MotoBox. Vi que te interesa ${model}. ¿Te gustaría que te cuente más detalles?` },
+    { label: '📋 Seguimiento', msg: `¡Hola ${name}! ¿Cómo estás? Te escribo para hacer seguimiento sobre ${model}. ¿Tenés alguna duda? Estoy para ayudarte.` },
+    { label: '📅 Agendar cita', msg: `¡Hola ${name}! ¿Te gustaría pasar por MotoBox para ver ${model} en persona? ¿Qué día te queda cómodo?` },
+    { label: '💰 Oferta', msg: `¡Hola ${name}! Tenemos una promoción especial en ${model}. ¿Te interesa que te cuente los detalles?` },
+    { label: '🔄 Reactivación', msg: `¡Hola ${name}! Hace un tiempo hablamos sobre ${model}. ¿Seguís interesado/a? Tenemos novedades que te pueden interesar.` },
+  ]
+}
 
 export default function LeadDetailPage() {
   const { id } = useParams()
@@ -29,6 +62,7 @@ export default function LeadDetailPage() {
   const [editForm, setEditForm] = useState({})
   const [intForm, setIntForm] = useState({ tipo: 'llamada', detalle: '' })
   const [saving, setSaving] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   useEffect(() => { if (id) fetchAll() }, [id])
 
@@ -134,15 +168,40 @@ export default function LeadDetailPage() {
         </div>
       </div>
 
+      {/* Temperature Badge */}
+      {(() => { const t = getLeadTemp(lead, interacciones.length); return (
+        <div className="lead-temp-badge" style={{ background: t.bg, borderLeft: `3px solid ${t.color}`, padding: '8px 14px', borderRadius: '8px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontWeight: 600, color: t.color, fontSize: '0.875rem' }}>{t.label}</span>
+          <span style={{ fontSize: '0.75rem', color: '#71717A' }}>{interacciones.length} interacciones · Creado {fmtDate(lead.created_at)}</span>
+        </div>
+      ) })()}
+
       {/* Quick Actions */}
       <div className="quick-actions">
-        <a className="quick-action wa" href={getWa(lead.telefono) || '#'} target="_blank" rel="noopener" {...(!lead.telefono && { disabled: true })}><MessageCircle size={16} /> WhatsApp</a>
+        <button className="quick-action wa" onClick={() => setShowTemplates(!showTemplates)} disabled={!lead.telefono}><MessageCircle size={16} /> {showTemplates ? 'Cerrar' : 'WhatsApp'}</button>
         <a className="quick-action call" href={lead.telefono ? `tel:${lead.telefono}` : '#'} {...(!lead.telefono && { disabled: true })}><Phone size={16} /> Llamar</a>
         <a className="quick-action mail" href={lead.email ? `mailto:${lead.email}` : '#'} {...(!lead.email && { disabled: true })}><Mail size={16} /> Email</a>
         <button className="quick-action edit" onClick={openEdit}><Edit size={16} /> Editar</button>
         <button className="quick-action" onClick={() => setShowIntModal(true)}><Plus size={16} /> Interacción</button>
         {isAdmin && <button className="quick-action danger" onClick={async () => { if (window.confirm('¿Eliminar este lead?')) { await supabase.from('leads').delete().eq('id', id); addToast('Lead eliminado', 'success'); navigate('/leads') } }}><Trash2 size={16} /> Eliminar</button>}
       </div>
+
+      {/* WhatsApp Templates */}
+      {showTemplates && lead.telefono && (
+        <div className="wa-templates">
+          <div className="wa-templates-title">💬 Enviar mensaje personalizado</div>
+          {getTemplates(lead).map((t, i) => (
+            <a key={i} className="wa-template" href={getWaMsg(lead.telefono, t.msg)} target="_blank" rel="noopener">
+              <span className="wa-template-label">{t.label}</span>
+              <span className="wa-template-preview">{t.msg.substring(0, 60)}...</span>
+            </a>
+          ))}
+          <a className="wa-template" href={getWa(lead.telefono)} target="_blank" rel="noopener">
+            <span className="wa-template-label">✏️ Mensaje libre</span>
+            <span className="wa-template-preview">Abrir chat sin mensaje pre-armado</span>
+          </a>
+        </div>
+      )}
 
       {/* Detail Grid */}
       <div className="detail-grid">
