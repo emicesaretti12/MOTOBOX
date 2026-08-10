@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, MoreHorizontal, Edit, Plus, X, Check } from 'lucide-react'
+import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, MoreHorizontal, Edit, Plus, X, Check, Trash2 } from 'lucide-react'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const TIPO_LABELS = { llamada: 'Llamada', whatsapp: 'WhatsApp', email: 'Email', visita: 'Visita', otro: 'Otro' }
@@ -34,17 +34,18 @@ export default function LeadDetailPage() {
 
   async function fetchAll() {
     try {
-      const [lr, ir, hr, vr] = await Promise.all([
+      const promises = [
         supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(full_name)').eq('id', id).single(),
         supabase.from('interacciones').select('*, usuario:profiles!usuario_id(full_name)').eq('lead_id', id).order('fecha', { ascending: false }),
         supabase.from('historial_cambios').select('*, usuario:profiles!usuario_id(full_name)').eq('lead_id', id).order('created_at', { ascending: false }).limit(20),
-        supabase.from('profiles').select('id, full_name').order('full_name')
-      ])
-      if (lr.error) throw lr.error
-      setLead(lr.data)
-      setInteracciones(ir.data || [])
-      setHistorial(hr.data || [])
-      setVendedores(vr.data || [])
+      ]
+      if (isAdmin) promises.push(supabase.from('profiles').select('id, full_name').order('full_name'))
+      const results = await Promise.all(promises)
+      if (results[0].error) throw results[0].error
+      setLead(results[0].data)
+      setInteracciones(results[1].data || [])
+      setHistorial(results[2].data || [])
+      setVendedores(results[3]?.data || [])
     } catch (e) { console.error(e); addToast('Error cargando lead', 'error') }
     finally { setLoading(false) }
   }
@@ -71,6 +72,8 @@ export default function LeadDetailPage() {
     setSaving(true)
     try {
       const updates = { ...editForm, vendedor_asignado: editForm.vendedor_asignado || null, presupuesto_estimado: editForm.presupuesto_estimado ? Number(editForm.presupuesto_estimado) : null, fecha_agenda: editForm.fecha_agenda || null }
+      // Empleado no puede modificar teléfono
+      if (!isAdmin && lead.telefono) updates.telefono = lead.telefono
       const changes = []
       const labels = { nombre: 'Nombre', telefono: 'Teléfono', email: 'Email', modelo_interes: 'Modelo', origen: 'Origen', estado: 'Estado', vendedor_asignado: 'Vendedor', presupuesto_estimado: 'Presupuesto', fecha_agenda: 'Cita', notas: 'Notas' }
       for (const k of Object.keys(labels)) {
@@ -137,6 +140,8 @@ export default function LeadDetailPage() {
         <a className="quick-action call" href={lead.telefono ? `tel:${lead.telefono}` : '#'} {...(!lead.telefono && { disabled: true })}><Phone size={16} /> Llamar</a>
         <a className="quick-action mail" href={lead.email ? `mailto:${lead.email}` : '#'} {...(!lead.email && { disabled: true })}><Mail size={16} /> Email</a>
         <button className="quick-action edit" onClick={openEdit}><Edit size={16} /> Editar</button>
+        <button className="quick-action" onClick={() => setShowIntModal(true)}><Plus size={16} /> Interacción</button>
+        {isAdmin && <button className="quick-action danger" onClick={async () => { if (window.confirm('¿Eliminar este lead?')) { await supabase.from('leads').delete().eq('id', id); addToast('Lead eliminado', 'success'); navigate('/leads') } }}><Trash2 size={16} /> Eliminar</button>}
       </div>
 
       {/* Detail Grid */}
@@ -214,7 +219,7 @@ export default function LeadDetailPage() {
               <div className="modal-body">
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Nombre</label><input className="form-input" value={editForm.nombre} onChange={e => setEditForm({ ...editForm, nombre: e.target.value })} required /></div>
-                  <div className="form-group"><label className="form-label">Teléfono</label><input className="form-input" value={editForm.telefono} onChange={e => setEditForm({ ...editForm, telefono: e.target.value })} /></div>
+                  <div className="form-group"><label className="form-label">Teléfono {!isAdmin && lead.telefono ? '🔒' : ''}</label><input className="form-input" value={editForm.telefono} onChange={e => setEditForm({ ...editForm, telefono: e.target.value })} disabled={!isAdmin && !!lead.telefono} />{!isAdmin && lead.telefono && <div className="form-hint">Solo el admin puede modificar el teléfono</div>}</div>
                 </div>
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Email</label><input className="form-input" type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></div>
