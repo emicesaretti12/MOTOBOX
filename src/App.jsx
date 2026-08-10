@@ -9,6 +9,9 @@ import AgendaPage from './pages/AgendaPage'
 import UsersPage from './pages/UsersPage'
 import VendorMonitorPage from './pages/VendorMonitorPage'
 import ProfilePage from './pages/ProfilePage'
+import InventoryPage from './pages/InventoryPage'
+import SalesPage from './pages/SalesPage'
+import ClientsPage from './pages/ClientsPage'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -75,6 +78,9 @@ function AppRoutes() {
         <Route path="leads/:id" element={<LeadDetailPage />} />
         <Route path="agenda" element={<AgendaPage />} />
         <Route path="perfil" element={<ProfilePage />} />
+        <Route path="inventario" element={<InventoryPage />} />
+        <Route path="ventas" element={<SalesPage />} />
+        <Route path="clientes" element={<ClientsPage />} />
         <Route
           path="monitor"
           element={
