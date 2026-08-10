@@ -1,205 +1,169 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
-import { useToast } from '../contexts/ToastContext';
-import { Plus, Search, X, Edit, Trash2, DollarSign as DollarIcon } from 'lucide-react';
-import { formatCurrency, formatDateTime, getErrorMessage, LEAD_STATUS_LABELS } from '../lib/utils';
+import { useState, useEffect, useMemo } from 'react'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
+import { Plus, Search, X, Edit, Trash2, DollarSign, TrendingUp, Award } from 'lucide-react'
+
+const EMPTY_SALE = { lead_id: '', moto_id: '', vendedor_id: '', precio_venta: '', metodo_pago: 'efectivo', fecha_venta: new Date().toISOString().slice(0, 16), notas: '' }
+const PAGO_LABELS = { efectivo: 'Efectivo', transferencia: 'Transferencia', tarjeta: 'Tarjeta', financiacion: 'Financiación', mixto: 'Mixto' }
+
+function fmt$(v) { return v ? '$' + Number(v).toLocaleString('es-AR') : '-' }
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }) : '-' }
 
 export default function SalesPage() {
-  const { isAdmin } = useAuth();
-  const { addToast } = useToast();
-  const [sales, setSales] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSale, setEditingSale] = useState(null);
-  const [leads, setLeads] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [inventory, setInventory] = useState([]);
-  const [vendedores, setVendedores] = useState([]);
-  const EMPTY_SALE = {
-    lead_id: '',
-    cliente_id: '',
-    moto_id: '',
-    vendedor_id: '',
-    precio_venta: '',
-    fecha_venta: new Date().toISOString().slice(0, 16),
-    notas: '',
-  };
-  const [formData, setFormData] = useState(EMPTY_SALE);
+  const { isAdmin, profile } = useAuth()
+  const { addToast } = useToast()
+  const [sales, setSales] = useState([])
+  const [leads, setLeads] = useState([])
+  const [motos, setMotos] = useState([])
+  const [vendedores, setVendedores] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingSale, setEditingSale] = useState(null)
+  const [formData, setFormData] = useState(EMPTY_SALE)
+  const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    fetchSales();
-    fetchRelatedData();
-  }, []);
+  useEffect(() => { fetchData() }, [])
 
-  async function fetchSales() {
+  async function fetchData() {
     try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('ventas')
-        .select('*, lead:leads(nombre, telefono), cliente:clientes(full_name, telefono), moto:inventario_motos(marca, modelo), vendedor:profiles(full_name)')
-        .order('fecha_venta', { ascending: false });
-      if (error) throw error;
-      setSales(data || []);
+      const promises = [
+        supabase.from('ventas').select('*, lead:leads!lead_id(nombre), moto:inventario_motos!moto_id(marca, modelo), vendedor:profiles!vendedor_id(full_name)').order('fecha_venta', { ascending: false }),
+        supabase.from('leads').select('id, nombre, estado').eq('estado', 'venta_cerrada'),
+        supabase.from('inventario_motos').select('id, marca, modelo, precio'),
+      ]
+      if (isAdmin) promises.push(supabase.from('profiles').select('id, full_name').order('full_name'))
+      const results = await Promise.all(promises)
+      setSales(results[0].data || [])
+      setLeads(results[1].data || [])
+      setMotos(results[2].data || [])
+      setVendedores(results[3]?.data || [])
     } catch (e) {
-      console.error('Error fetching sales:', e);
-      addToast(`Error al cargar las ventas: ${getErrorMessage(e)}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+      console.error(e)
+      setSales([])
+    } finally { setLoading(false) }
   }
 
-  async function fetchRelatedData() {
-    try {
-      const { data: leadsData, error: leadsError } = await supabase.from('leads').select('id, nombre, telefono, email');
-      if (leadsError) throw leadsError;
-      setLeads(leadsData || []);
+  const filtered = useMemo(() => sales.filter(s => {
+    if (search && !s.lead?.nombre?.toLowerCase().includes(search.toLowerCase()) && !`${s.moto?.marca} ${s.moto?.modelo}`.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  }), [sales, search])
 
-      const { data: clientsData, error: clientsError } = await supabase.from('clientes').select('id, full_name, telefono, email');
-      if (clientsError) throw clientsError;
-      setClients(clientsData || []);
-
-      const { data: inventoryData, error: inventoryError } = await supabase.from('inventario_motos').select('id, marca, modelo, precio').eq('estado', 'disponible');
-      if (inventoryError) throw inventoryError;
-      setInventory(inventoryData || []);
-
-      if (isAdmin) {
-        const { data: vendorsData, error: vendorsError } = await supabase.from('profiles').select('id, full_name').order('full_name');
-        if (vendorsError) throw vendorsError;
-        setVendedores(vendorsData || []);
-      }
-    } catch (e) {
-      console.error('Error fetching related data:', e);
-      addToast(`Error al cargar datos relacionados: ${getErrorMessage(e)}`, 'error');
-    }
-  }
-
-  async function handleDelete(id) {
-    if (!window.confirm('¿Estás seguro de que quieres eliminar esta venta?')) return;
-    try {
-      const { error } = await supabase.from('ventas').delete().eq('id', id);
-      if (error) throw error;
-      addToast('Venta eliminada', 'success');
-      fetchSales();
-    } catch (e) {
-      addToast(`Error al eliminar la venta: ${getErrorMessage(e)}`, 'error');
-      console.error(e);
-    }
-  }
+  const stats = useMemo(() => ({
+    total: sales.length,
+    revenue: sales.reduce((s, v) => s + (Number(v.precio_venta) || 0), 0),
+    promedio: sales.length > 0 ? sales.reduce((s, v) => s + (Number(v.precio_venta) || 0), 0) / sales.length : 0,
+    esteMes: sales.filter(v => { const d = new Date(v.fecha_venta); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() }).length
+  }), [sales])
 
   function openModal(sale) {
     if (sale) {
-      setEditingSale(sale);
-      setFormData({
-        lead_id: sale.lead_id || '',
-        cliente_id: sale.cliente_id || '',
-        moto_id: sale.moto_id || '',
-        vendedor_id: sale.vendedor_id || '',
-        precio_venta: sale.precio_venta || '',
-        fecha_venta: sale.fecha_venta ? sale.fecha_venta.slice(0, 16) : new Date().toISOString().slice(0, 16),
-        notas: sale.notas || '',
-      });
+      setEditingSale(sale)
+      setFormData({ lead_id: sale.lead_id || '', moto_id: sale.moto_id || '', vendedor_id: sale.vendedor_id || '', precio_venta: sale.precio_venta || '', metodo_pago: sale.metodo_pago || 'efectivo', fecha_venta: sale.fecha_venta ? sale.fecha_venta.slice(0, 16) : '', notas: sale.notas || '' })
     } else {
-      setEditingSale(null);
-      setFormData({ ...EMPTY_SALE, vendedor_id: isAdmin ? '' : supabase.auth.user()?.id || '' });
+      setEditingSale(null)
+      setFormData({ ...EMPTY_SALE, vendedor_id: isAdmin ? '' : profile?.id || '' })
     }
-    setIsModalOpen(true);
+    setIsModalOpen(true)
   }
 
   async function handleSave(e) {
-    e.preventDefault();
+    e.preventDefault()
+    setSaving(true)
     try {
-      if (!formData.cliente_id || !formData.precio_venta || !formData.vendedor_id) {
-        addToast('Cliente, Precio de Venta y Vendedor son obligatorios', 'error');
-        return;
-      }
-      const payload = { ...formData, precio_venta: Number(formData.precio_venta) };
+      const payload = { ...formData, precio_venta: formData.precio_venta ? Number(formData.precio_venta) : null, vendedor_id: formData.vendedor_id || null, lead_id: formData.lead_id || null, moto_id: formData.moto_id || null, fecha_venta: formData.fecha_venta || null }
       if (editingSale) {
-        const { error } = await supabase.from('ventas').update(payload).eq('id', editingSale.id);
-        if (error) throw error;
-        addToast('Venta actualizada', 'success');
+        const { error } = await supabase.from('ventas').update(payload).eq('id', editingSale.id)
+        if (error) throw error
+        addToast('Venta actualizada', 'success')
       } else {
-        const { error } = await supabase.from('ventas').insert([payload]);
-        if (error) throw error;
-        addToast('Venta creada', 'success');
+        const { error } = await supabase.from('ventas').insert([payload])
+        if (error) throw error
+        // Marcar moto como vendida
+        if (payload.moto_id) await supabase.from('inventario_motos').update({ estado: 'vendida' }).eq('id', payload.moto_id)
+        addToast('Venta registrada', 'success')
       }
-      setIsModalOpen(false);
-      fetchSales();
-    } catch (e) {
-      addToast(`Error al guardar la venta: ${getErrorMessage(e)}`, 'error');
-      console.error(e);
-    }
+      setIsModalOpen(false)
+      fetchData()
+    } catch (e) { addToast('Error al guardar', 'error'); console.error(e) }
+    finally { setSaving(false) }
   }
 
-  const filteredSales = useMemo(() => sales.filter(sale => {
-    if (search &&
-      !sale.lead?.nombre?.toLowerCase().includes(search.toLowerCase()) &&
-      !sale.cliente?.full_name?.toLowerCase().includes(search.toLowerCase()) &&
-      !sale.moto?.modelo?.toLowerCase().includes(search.toLowerCase())
-    ) return false;
-    return true;
-  }), [sales, search]);
+  async function handleDelete(id) {
+    if (!isAdmin) return
+    if (!window.confirm('¿Eliminar esta venta?')) return
+    try {
+      const { error } = await supabase.from('ventas').delete().eq('id', id)
+      if (error) throw error
+      addToast('Venta eliminada', 'success')
+      fetchData()
+    } catch (e) { addToast('Error', 'error') }
+  }
 
-  if (loading) return <div className="spinner-overlay"><div className="spinner" /></div>;
+  if (loading) return <div className="spinner-overlay"><div className="spinner" /></div>
 
   return (
-    <div className="page-content">
-      <div className="page-header">
-        <h1 className="page-title">Gestión de Ventas</h1>
-        <button className="btn btn-primary" onClick={() => openModal()}>
-          <Plus size={16} /> Nueva Venta
-        </button>
+    <div>
+      <div className="stats-row">
+        <div className="stat-card">
+          <div className="stat-card-header"><div className="stat-card-icon green"><Award size={20} /></div></div>
+          <div className="stat-card-value">{stats.total}</div>
+          <div className="stat-card-label">Total Ventas</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-header"><div className="stat-card-icon blue"><DollarSign size={20} /></div></div>
+          <div className="stat-card-value">{fmt$(stats.revenue)}</div>
+          <div className="stat-card-label">Revenue Total</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-header"><div className="stat-card-icon purple"><TrendingUp size={20} /></div></div>
+          <div className="stat-card-value">{fmt$(Math.round(stats.promedio))}</div>
+          <div className="stat-card-label">Ticket Promedio</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-card-header"><div className="stat-card-icon red"><DollarSign size={20} /></div></div>
+          <div className="stat-card-value">{stats.esteMes}</div>
+          <div className="stat-card-label">Este Mes</div>
+        </div>
       </div>
 
-      <div className="filters-bar mb-4">
+      <div className="filters-bar">
         <div className="search-input-wrap">
           <Search size={16} />
-          <input placeholder="Buscar por lead, cliente o moto..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input placeholder="Buscar cliente o moto..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        {isAdmin && <button className="btn btn-primary btn-sm" onClick={() => openModal()}><Plus size={14} /> Nueva Venta</button>}
+        <span className="results-count">{filtered.length} ventas</span>
       </div>
 
       <div className="card">
         <div className="card-body-flush">
           <table className="data-table">
             <thead>
-              <tr>
-                <th>Lead</th>
-                <th>Cliente</th>
-                <th>Moto</th>
-                <th>Vendedor</th>
-                <th>Precio Venta</th>
-                <th>Fecha Venta</th>
-                <th>Acciones</th>
-              </tr>
+              <tr><th>Fecha</th><th>Cliente</th><th>Moto</th><th>Vendedor</th><th>Precio</th><th>Pago</th>{isAdmin && <th>Acciones</th>}</tr>
             </thead>
             <tbody>
-              {filteredSales.length === 0 ? (
-                <tr>
-                  <td colSpan="7">
-                    <div className="empty-state">
-                      <p>No se encontraron ventas.</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredSales.map(sale => (
-                  <tr key={sale.id}>
-                    <td>{sale.lead?.nombre || 'N/A'}</td>
-                    <td>{sale.cliente?.full_name || 'N/A'}</td>
-                    <td>{sale.moto ? `${sale.moto.marca} ${sale.moto.modelo}` : 'N/A'}</td>
-                    <td>{sale.vendedor?.full_name || 'N/A'}</td>
-                    <td>{formatCurrency(sale.precio_venta)}</td>
-                    <td>{formatDateTime(sale.fecha_venta)}</td>
+              {filtered.length === 0 ? (
+                <tr><td colSpan={isAdmin ? 7 : 6}><div className="empty-state"><p>No hay ventas registradas</p></div></td></tr>
+              ) : filtered.map(s => (
+                <tr key={s.id}>
+                  <td>{fmtDate(s.fecha_venta)}</td>
+                  <td className="table-cell-primary">{s.lead?.nombre || '-'}</td>
+                  <td>{s.moto ? `${s.moto.marca} ${s.moto.modelo}` : '-'}</td>
+                  <td className="table-cell-secondary">{s.vendedor?.full_name || '-'}</td>
+                  <td className="table-cell-primary">{fmt$(s.precio_venta)}</td>
+                  <td>{PAGO_LABELS[s.metodo_pago] || s.metodo_pago || '-'}</td>
+                  {isAdmin && (
                     <td>
                       <div className="table-actions">
-                        <button className="btn-icon" onClick={() => openModal(sale)}><Edit size={16} /></button>
-                        <button className="btn-icon text-red-500 hover:text-red-700" onClick={() => handleDelete(sale.id)}><Trash2 size={16} /></button>
+                        <button className="btn-icon" title="Editar" onClick={() => openModal(s)}><Edit size={16} /></button>
+                        <button className="btn-icon danger" title="Eliminar" onClick={() => handleDelete(s.id)}><Trash2 size={16} /></button>
                       </div>
                     </td>
-                  </tr>
-                ))
-              )}
+                  )}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -209,68 +173,64 @@ export default function SalesPage() {
         <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">{editingSale ? 'Editar Venta' : 'Nueva Venta'}</h3>
+              <h3>{editingSale ? 'Editar Venta' : 'Registrar Venta'}</h3>
               <button className="modal-close" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
             </div>
             <form onSubmit={handleSave}>
               <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">Lead Asociado</label>
-                  <select className="form-input" value={formData.lead_id} onChange={e => setFormData({ ...formData, lead_id: e.target.value })}>
-                    <option value="">Seleccionar Lead (Opcional)</option>
-                    {leads.map(lead => (
-                      <option key={lead.id} value={lead.id}>{lead.nombre} ({lead.telefono})</option>
-                    ))}
-                  </select>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Cliente (Lead)</label>
+                    <select className="form-input" value={formData.lead_id} onChange={e => setFormData({ ...formData, lead_id: e.target.value })}>
+                      <option value="">Seleccionar...</option>
+                      {leads.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Moto</label>
+                    <select className="form-input" value={formData.moto_id} onChange={e => setFormData({ ...formData, moto_id: e.target.value })}>
+                      <option value="">Seleccionar...</option>
+                      {motos.map(m => <option key={m.id} value={m.id}>{m.marca} {m.modelo} - {fmt$(m.precio)}</option>)}
+                    </select>
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Cliente *</label>
-                  <select className="form-input" value={formData.cliente_id} onChange={e => setFormData({ ...formData, cliente_id: e.target.value })} required>
-                    <option value="">Seleccionar Cliente</option>
-                    {clients.map(client => (
-                      <option key={client.id} value={client.id}>{client.full_name} ({client.telefono})</option>
-                    ))}
-                  </select>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Precio de Venta *</label>
+                    <input className="form-input" type="number" value={formData.precio_venta} onChange={e => setFormData({ ...formData, precio_venta: e.target.value })} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Método de Pago</label>
+                    <select className="form-input" value={formData.metodo_pago} onChange={e => setFormData({ ...formData, metodo_pago: e.target.value })}>
+                      {Object.entries(PAGO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Moto Vendida</label>
-                  <select className="form-input" value={formData.moto_id} onChange={e => setFormData({ ...formData, moto_id: e.target.value })}>
-                    <option value="">Seleccionar Moto (Opcional)</option>
-                    {inventory.map(moto => (
-                      <option key={moto.id} value={moto.id}>{moto.marca} {moto.modelo} ({formatCurrency(moto.precio)})</option>
-                    ))}
-                  </select>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Fecha de Venta</label>
+                    <input className="form-input" type="datetime-local" value={formData.fecha_venta} onChange={e => setFormData({ ...formData, fecha_venta: e.target.value })} />
+                  </div>
+                  {isAdmin && (
+                    <div className="form-group">
+                      <label className="form-label">Vendedor</label>
+                      <select className="form-input" value={formData.vendedor_id} onChange={e => setFormData({ ...formData, vendedor_id: e.target.value })}>
+                        <option value="">Seleccionar...</option>
+                        {vendedores.map(v => <option key={v.id} value={v.id}>{v.full_name}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Vendedor *</label>
-                  <select className="form-input" value={formData.vendedor_id} onChange={e => setFormData({ ...formData, vendedor_id: e.target.value })} required>
-                    <option value="">Seleccionar Vendedor</option>
-                    {vendedores.map(v => (
-                      <option key={v.id} value={v.id}>{v.full_name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Precio de Venta *</label>
-                  <input className="form-input" type="number" value={formData.precio_venta} onChange={e => setFormData({ ...formData, precio_venta: e.target.value })} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Fecha de Venta</label>
-                  <input className="form-input" type="datetime-local" value={formData.fecha_venta} onChange={e => setFormData({ ...formData, fecha_venta: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Notas</label>
-                  <textarea className="form-input" value={formData.notas} onChange={e => setFormData({ ...formData, notas: e.target.value })}></textarea>
-                </div>
+                <div className="form-group"><label className="form-label">Notas</label><textarea className="form-input" rows="3" value={formData.notas} onChange={e => setFormData({ ...formData, notas: e.target.value })}></textarea></div>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn btn-primary">Guardar</button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>
               </div>
             </form>
           </div>
         </div>
       )}
     </div>
-  );
+  )
 }
