@@ -29,7 +29,20 @@ export default function InventoryPage() {
   })
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { fetchInventory() }, [])
+  useEffect(() => {
+    fetchInventory()
+
+    const channel = supabase
+      .channel('inventario-motos-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventario_motos' }, () => {
+        fetchInventory()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
 
   async function fetchInventory() {
     try {

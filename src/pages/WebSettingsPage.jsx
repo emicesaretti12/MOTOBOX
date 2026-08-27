@@ -11,7 +11,20 @@ export default function WebSettingsPage() {
   const [uploading, setUploading] = useState(false)
   const [previewImg, setPreviewImg] = useState(null)
 
-  useEffect(() => { fetchConfig() }, [])
+  useEffect(() => {
+    fetchConfig()
+
+    const channel = supabase
+      .channel('configuracion-web-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'configuracion_web' }, () => {
+        fetchConfig()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
 
   async function fetchConfig() {
     try {

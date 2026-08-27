@@ -52,7 +52,23 @@ export default function DashboardPage() {
   const [interacciones, setInteracciones] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    fetchData()
+
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
+        fetchData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'interacciones' }, () => {
+        fetchData()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
 
   async function fetchData() {
     try {

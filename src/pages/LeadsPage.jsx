@@ -38,7 +38,18 @@ export default function LeadsPage() {
     if (isAdmin) supabase.from('profiles').select('id, full_name').order('full_name').then(({ data }) => setVendedores(data || []))
     const h = () => openModal()
     window.addEventListener('open-new-lead', h)
-    return () => window.removeEventListener('open-new-lead', h)
+
+    const channel = supabase
+      .channel('leads-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
+        fetchLeads()
+      })
+      .subscribe()
+
+    return () => {
+      window.removeEventListener('open-new-lead', h)
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   async function fetchLeads() {
