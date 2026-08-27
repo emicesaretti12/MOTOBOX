@@ -34,6 +34,7 @@ export default function Layout() {
     if (path === '/inventario') return 'Gestión de Inventario'
     if (path === '/ventas') return 'Gestión de Ventas'
     if (path === '/clientes') return 'Gestión de Clientes'
+    if (path === '/web-config') return 'Configurar Web Pública'
     return 'MotoBox CRM'
   }
 
@@ -158,6 +159,15 @@ export default function Layout() {
               >
                 <UserPlus size={18} />
                 Usuarios
+              </NavLink>
+
+              <NavLink
+                to="/web-config"
+                className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <Settings size={18} />
+                Configurar Web
               </NavLink>
             </>
           )}
