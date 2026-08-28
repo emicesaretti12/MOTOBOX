@@ -1,13 +1,13 @@
 /**
  * Image Optimizer Utility for MotoBox CRM
- * Integrates Cloudinary (di9j6zwyz) + Client-Side WebP Canvas Compression
+ * Client-Side WebP Canvas Compression + Direct CDN Delivery
  */
 
-const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'di9j6zwyz'
-const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'motobox'
+const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || ''
+const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || ''
 
 /**
- * Sanitizes a filename to safe ASCII alphanumeric characters (no spaces, accents, commas)
+ * Sanitizes a filename to safe ASCII alphanumeric characters
  */
 function sanitizeFileName(name) {
   return name
@@ -19,8 +19,8 @@ function sanitizeFileName(name) {
 }
 
 /**
- * Compresses an image File locally in the browser using HTML5 Canvas
- * Reduces 5MB-10MB photos to ~80KB before upload.
+ * Compresses an image File locally in the browser using HTML5 Canvas.
+ * Converts 5MB-10MB camera photos to ~80KB high-quality WebP.
  */
 export async function compressImage(file, options = {}) {
   const {
@@ -86,29 +86,27 @@ export async function compressImage(file, options = {}) {
 }
 
 /**
- * Uploads image with full Cloudinary optimization:
- * 1. Compresses locally first to lightweight WebP (~80KB)
- * 2. Attempts Direct Cloudinary Upload (f_auto, q_auto)
- * 3. Fallback: Uploads sanitized file to Supabase Storage and routes through Cloudinary Fetch CDN
+ * Uploads image with full auto-optimization:
+ * 1. Compresses locally in browser to lightweight WebP (~80KB)
+ * 2. If Cloudinary unsigned preset is configured, uploads directly to Cloudinary
+ * 3. Default / Fallback: Uploads ultra-optimized WebP directly to Supabase Public Storage (zero-config, ultra-fast)
  */
 export async function uploadOptimizedImage(file, supabase, path = 'motos') {
-  // Step 1: Compress locally in browser
+  // Step 1: Compress locally in browser (reduces 10MB -> 80KB WebP)
   const { file: compressedFile, reductionPercent, compressedSize } = await compressImage(file, {
     maxWidth: 1280,
     maxHeight: 1280,
     quality: 0.82
   })
 
-  console.log(`[Cloudinary Optimizer] 📉 Imagen comprimida: ${Math.round(compressedSize / 1024)} KB (-${reductionPercent}%)`)
+  console.log(`[Image Optimizer] 📉 Foto optimizada en el navegador: ${Math.round(compressedSize / 1024)} KB (-${reductionPercent}% de peso)`)
 
-  // Step 2: Try direct unsigned upload to Cloudinary (if preset exists)
-  if (CLOUD_NAME) {
+  // Step 2: If Cloudinary preset is configured, try direct unsigned upload
+  if (CLOUD_NAME && UPLOAD_PRESET && UPLOAD_PRESET !== 'motobox') {
     try {
       const formData = new FormData()
       formData.append('file', compressedFile)
-      if (UPLOAD_PRESET) {
-        formData.append('upload_preset', UPLOAD_PRESET)
-      }
+      formData.append('upload_preset', UPLOAD_PRESET)
       formData.append('folder', `motobox/${path}`)
 
       const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
@@ -119,16 +117,15 @@ export async function uploadOptimizedImage(file, supabase, path = 'motos') {
       if (res.ok) {
         const data = await res.json()
         const optimizedUrl = data.secure_url.replace('/upload/', '/upload/f_auto,q_auto,w_1200/')
-        console.log('[Cloudinary Optimizer] ☁️ Subida exitosa directa a Cloudinary:', optimizedUrl)
+        console.log('[Image Optimizer] ☁️ Subida directa a Cloudinary exitosa:', optimizedUrl)
         return { url: optimizedUrl, provider: 'cloudinary' }
       }
     } catch (err) {
-      console.warn('[Cloudinary Optimizer] Subida directa no disponible, usando Storage + Fetch CDN:', err)
+      console.warn('[Image Optimizer] Fallback a Storage directo:', err)
     }
   }
 
-  // Step 3: Supabase Storage + Cloudinary Fetch CDN Delivery
-  // Use clean, sanitized filename without spaces or commas to avoid S3 400 Bad Request
+  // Step 3: Direct WebP upload to Supabase Public Storage
   const cleanExt = compressedFile.name.split('.').pop() || 'webp'
   const safeFileName = `${path}/${Date.now()}_${sanitizeFileName(file.name)}.${cleanExt}`
 
@@ -139,13 +136,8 @@ export async function uploadOptimizedImage(file, supabase, path = 'motos') {
   if (upErr) throw upErr
 
   const { data: urlData } = supabase.storage.from('motobox-public').getPublicUrl(safeFileName)
-  const supabaseUrl = urlData.publicUrl
+  const publicUrl = urlData.publicUrl
 
-  // Wrap with Cloudinary Fetch CDN for automatic transformation, WebP/AVIF formatting, and edge caching
-  const cloudinaryCdnUrl = CLOUD_NAME
-    ? `https://res.cloudinary.com/${CLOUD_NAME}/image/fetch/f_auto,q_auto,w_1200/${encodeURIComponent(supabaseUrl)}`
-    : supabaseUrl
-
-  console.log('[Cloudinary Optimizer] 🚀 Entregando vía Cloudinary CDN:', cloudinaryCdnUrl)
-  return { url: cloudinaryCdnUrl, provider: 'cloudinary-fetch' }
+  console.log('[Image Optimizer] ⚡ Foto WebP guardada y servida a máxima velocidad:', publicUrl)
+  return { url: publicUrl, provider: 'webp-storage' }
 }
