@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { Phone, MessageCircle, Mail, MapPin, Target, Award, TrendingUp } from 'lucide-react'
+import { Phone, MessageCircle, Mail, MapPin, Target, Award, TrendingUp, Calendar, Users } from 'lucide-react'
 
 function fmt$(v) { return v ? '$' + Number(v).toLocaleString('es-AR') : '$0' }
 
@@ -18,14 +18,25 @@ export default function ProfilePage() {
 
   async function fetchStats() {
     try {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const todayISO = today.toISOString()
+
+      let leadsQuery = supabase.from('leads').select('estado, presupuesto_estimado, created_at')
+      if (!isAdmin) {
+        leadsQuery = leadsQuery.eq('vendedor_asignado', profile.id)
+      }
+
       const [lr, ir] = await Promise.all([
-        supabase.from('leads').select('estado, presupuesto_estimado').eq('vendedor_asignado', profile.id),
+        leadsQuery,
         supabase.from('interacciones').select('tipo').eq('usuario_id', profile.id)
       ])
       const leads = lr.data || []
       const ints = ir.data || []
+      const leadsHoy = leads.filter(l => l.created_at && new Date(l.created_at) >= today).length
       setStats({
         total: leads.length,
+        leadsHoy,
         ventas: leads.filter(l => l.estado === 'venta_cerrada').length,
         negociacion: leads.filter(l => l.estado === 'en_negociacion').length,
         revenue: leads.filter(l => l.estado === 'venta_cerrada').reduce((s, l) => s + (Number(l.presupuesto_estimado) || 0), 0),
@@ -59,6 +70,33 @@ export default function ProfilePage() {
 
   return (
     <div>
+      {/* Stats row for admin */}
+      {isAdmin && stats && (
+        <div className="stats-row">
+          <div className="stat-card">
+            <div className="stat-card-header"><div className="stat-card-icon red"><Users size={20} /></div></div>
+            <div className="stat-card-value">{stats.total}</div>
+            <div className="stat-card-label">Total Leads</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-header"><div className="stat-card-icon blue"><Calendar size={20} /></div></div>
+            <div className="stat-card-value">{stats.leadsHoy}</div>
+            <div className="stat-card-label">Leads Ingresados Hoy</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-header"><div className="stat-card-icon green"><Award size={20} /></div></div>
+            <div className="stat-card-value">{stats.ventas}</div>
+            <div className="stat-card-label">Ventas Totales</div>
+            <div className="stat-card-trend up">{stats.conversion}%</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-header"><div className="stat-card-icon purple"><TrendingUp size={20} /></div></div>
+            <div className="stat-card-value">{fmt$(stats.revenue)}</div>
+            <div className="stat-card-label">Revenue Total</div>
+          </div>
+        </div>
+      )}
+
       {/* Stats row for employee */}
       {!isAdmin && stats && (
         <div className="stats-row">

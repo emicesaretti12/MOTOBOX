@@ -4,6 +4,8 @@ import { useToast } from '../contexts/ToastContext'
 import { Image as ImageIcon, Save, Eye, Upload, ExternalLink, Globe, Star, Plus, CheckCircle, Sparkles, RefreshCw } from 'lucide-react'
 import { uploadOptimizedImage } from '../lib/imageOptimizer'
 
+function fmt$(v) { return v ? '$' + Number(v).toLocaleString('es-AR') : '-' }
+
 export default function WebSettingsPage() {
   const { addToast } = useToast()
   const [activeTab, setActiveTab] = useState('poster') // poster | catalogo
