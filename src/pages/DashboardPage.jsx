@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
-import { Users, TrendingUp, Target, Award, DollarSign, ChevronRight, Phone, MessageCircle, Calendar, AlertTriangle, Flame, Snowflake, Clock, Zap, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react'
+import { Users, Award, Target, DollarSign, ChevronRight, Phone, MessageCircle, Calendar, Flame, Snowflake, Clock, Zap, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const STATUS_COLORS = { nuevo: '#2563EB', contactado: '#D97706', en_negociacion: '#7C3AED', venta_cerrada: '#16A34A', perdido: '#71717A' }
-const FUNNEL_ORDER = ['nuevo', 'contactado', 'en_negociacion', 'venta_cerrada']
 const TIPO_ICONS = { llamada: Phone, whatsapp: MessageCircle }
 
 function timeAgo(date) {
@@ -20,6 +19,16 @@ function timeAgo(date) {
 
 function fmt$(v) { return v ? '$' + Number(v).toLocaleString('es-AR') : '-' }
 function fmtTime(d) { return new Date(d).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) }
+
+// Local date key YYYY-MM-DD — uses browser local timezone, NOT UTC
+// This ensures a lead created at 23:30 local time is counted on the correct local day
+function toLocalDateKey(input) {
+  const d = typeof input === 'string' ? new Date(input) : input
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 // Intelligent Lead Temperature
 function getLeadTemp(lead, lastInteraction) {
@@ -106,20 +115,16 @@ export default function DashboardPage() {
     const revenue = leads.filter(l => l.estado === 'venta_cerrada').reduce((s, l) => s + (Number(l.presupuesto_estimado) || 0), 0)
     const pipeline = leads.filter(l => l.estado === 'en_negociacion').reduce((s, l) => s + (Number(l.presupuesto_estimado) || 0), 0)
     const conversion = total > 0 ? ((ventas / total) * 100).toFixed(1) : '0'
-    const week = new Date(Date.now() - 7 * 86400000)
-    const nuevosEstaSemana = leads.filter(l => new Date(l.created_at) >= week).length
+    // "Esta semana" = últimos 7 días usando fecha local
+    const todayKey = toLocalDateKey(new Date())
+    const weekAgo = new Date()
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    const nuevosEstaSemana = leads.filter(l => {
+      const leadDate = new Date(l.created_at)
+      return leadDate >= weekAgo
+    }).length
     return { total, ventas, negociacion, conversion, revenue, pipeline, nuevosEstaSemana }
   }, [leads])
-
-  // Funnel data
-  const funnelData = useMemo(() =>
-    FUNNEL_ORDER.map(estado => ({
-      estado, label: STATUS_LABELS[estado], color: STATUS_COLORS[estado],
-      count: leads.filter(l => l.estado === estado).length,
-      value: leads.filter(l => l.estado === estado).reduce((s, l) => s + (Number(l.presupuesto_estimado) || 0), 0)
-    })),
-    [leads])
-  const maxFunnel = Math.max(...funnelData.map(f => f.count), 1)
 
   // Pie chart
   const pieData = useMemo(() =>
@@ -132,25 +137,21 @@ export default function DashboardPage() {
     const a = []
     const activeLeads = leads.filter(l => !['venta_cerrada', 'perdido'].includes(l.estado))
 
-    // Hot leads without appointment
     const hotNoAppt = activeLeads.filter(l => {
       const t = getLeadTemp(l, lastIntMap[l.id])
       return t.temp === 'hot' && !l.fecha_agenda
     })
     if (hotNoAppt.length > 0) a.push({ type: 'warning', icon: Flame, title: `${hotNoAppt.length} lead${hotNoAppt.length > 1 ? 's' : ''} caliente${hotNoAppt.length > 1 ? 's' : ''} sin cita agendada`, leads: hotNoAppt.slice(0, 3) })
 
-    // Leads going cold (no contact >5 days)
     const goingCold = activeLeads.filter(l => {
       const days = lastIntMap[l.id] ? (Date.now() - new Date(lastIntMap[l.id])) / 86400000 : (Date.now() - new Date(l.created_at)) / 86400000
       return days > 5 && days < 15
     })
     if (goingCold.length > 0) a.push({ type: 'danger', icon: Snowflake, title: `${goingCold.length} lead${goingCold.length > 1 ? 's' : ''} enfriándose (>5 días sin contacto)`, leads: goingCold.slice(0, 3) })
 
-    // Overdue appointments
     const overdue = leads.filter(l => l.fecha_agenda && new Date(l.fecha_agenda) < new Date() && !['venta_cerrada', 'perdido'].includes(l.estado))
     if (overdue.length > 0) a.push({ type: 'info', icon: Clock, title: `${overdue.length} cita${overdue.length > 1 ? 's' : ''} vencida${overdue.length > 1 ? 's' : ''} sin cerrar`, leads: overdue.slice(0, 3) })
 
-    // High-value opportunities
     const highValue = activeLeads.filter(l => l.estado === 'en_negociacion' && Number(l.presupuesto_estimado) > 500000)
     if (highValue.length > 0) a.push({ type: 'success', icon: Zap, title: `${highValue.length} oportunidad${highValue.length > 1 ? 'es' : ''} de alto valor en negociación`, leads: highValue.slice(0, 3) })
 
@@ -159,8 +160,8 @@ export default function DashboardPage() {
 
   // Today's appointments
   const citasHoy = useMemo(() => {
-    const todayStr = new Date().toDateString()
-    return leads.filter(l => l.fecha_agenda && new Date(l.fecha_agenda).toDateString() === todayStr)
+    const todayKey = toLocalDateKey(new Date())
+    return leads.filter(l => l.fecha_agenda && toLocalDateKey(l.fecha_agenda) === todayKey)
       .sort((a, b) => new Date(a.fecha_agenda) - new Date(b.fecha_agenda))
   }, [leads])
 
@@ -187,63 +188,59 @@ export default function DashboardPage() {
     return Object.values(map).sort((a, b) => b.ventas - a.ventas)
   }, [leads, isAdmin])
 
-  // Helper: local date key (YYYY-MM-DD) — avoids UTC shift from toISOString
-  function localDateKey(dateStr) {
-    const d = new Date(dateStr)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  }
+  // ===== LEADS POR DÍA — Conteo exacto con timezone local =====
 
-  function localDateKeyFromDate(d) {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  }
-
-  // Leads per day (admin only) — grouped by LOCAL date
-  const leadsPerDay = useMemo(() => {
-    if (!isAdmin) return {}
+  // Step 1: Index ALL leads by their local creation date
+  const leadsByLocalDate = useMemo(() => {
     const map = {}
     leads.forEach(l => {
-      const key = localDateKey(l.created_at)
+      const key = toLocalDateKey(l.created_at)
       if (!map[key]) map[key] = []
       map[key].push(l)
     })
     return map
-  }, [leads, isAdmin])
+  }, [leads])
 
-  // Build daily data for the selected range
+  // Step 2: Build array for the selected range (today → N days back)
   const dailyData = useMemo(() => {
-    if (!isAdmin) return []
     const result = []
-    const now = new Date()
+    const today = new Date()
+    // Reset to start of day to avoid partial-day issues
+    today.setHours(23, 59, 59, 999)
+
     for (let i = 0; i < daysRange; i++) {
-      const d = new Date(now)
-      d.setDate(d.getDate() - i)
-      const key = localDateKeyFromDate(d)
-      const dayLeads = leadsPerDay[key] || []
-      const isToday = i === 0
-      const isYesterday = i === 1
-      const weekday = d.toLocaleDateString('es-AR', { weekday: 'short' })
-      const dateLabel = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-      const shortLabel = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+      const d = new Date(today)
+      d.setDate(today.getDate() - i)
+      const key = toLocalDateKey(d)
+      const dayLeads = leadsByLocalDate[key] || []
+      const weekday = d.toLocaleDateString('es-AR', { weekday: 'long' })
       result.push({
         key,
-        dateLabel,
-        shortLabel,
-        dayName: isToday ? 'Hoy' : isYesterday ? 'Ayer' : weekday.charAt(0).toUpperCase() + weekday.slice(1),
+        dateLabel: d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' }),
+        fullDate: d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        chartLabel: d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }),
+        dayName: i === 0 ? 'Hoy' : i === 1 ? 'Ayer' : weekday.charAt(0).toUpperCase() + weekday.slice(1),
         leads: dayLeads,
         count: dayLeads.length,
       })
     }
     return result
-  }, [leadsPerDay, daysRange, isAdmin])
+  }, [leadsByLocalDate, daysRange])
 
-  // Chart data (reversed for chronological order left→right)
+  // Step 3: Chart data (chronological: oldest left → newest right)
   const chartData = useMemo(() => [...dailyData].reverse(), [dailyData])
 
-  // Summary stats
+  // Step 4: Summary — exact counts
   const totalInRange = useMemo(() => dailyData.reduce((s, d) => s + d.count, 0), [dailyData])
   const daysWithLeads = useMemo(() => dailyData.filter(d => d.count > 0).length, [dailyData])
   const avgPerDay = daysRange > 0 ? (totalInRange / daysRange).toFixed(1) : '0'
-  const bestDay = useMemo(() => dailyData.reduce((best, d) => d.count > best.count ? d : best, { count: 0, dayName: '', dateLabel: '' }), [dailyData])
+  const bestDay = useMemo(() => dailyData.reduce((best, d) => d.count > best.count ? d : best, { count: 0, dayName: '-', fullDate: '' }), [dailyData])
+
+  // Leads de hoy (exact)
+  const leadsHoy = useMemo(() => {
+    const key = toLocalDateKey(new Date())
+    return (leadsByLocalDate[key] || []).length
+  }, [leadsByLocalDate])
 
   function toggleDay(key) {
     setExpandedDays(prev => ({ ...prev, [key]: !prev[key] }))
@@ -303,37 +300,154 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Funnel + Citas Hoy */}
-      <div className="grid-2">
-        {/* Conversion Funnel */}
-        <div className="card">
-          <div className="card-header"><h3>Embudo de Conversión</h3></div>
-          <div className="card-body">
-            {funnelData.map((f, i) => {
-              const pct = (f.count / maxFunnel * 100).toFixed(0)
-              const convNext = i < funnelData.length - 1 && funnelData[i].count > 0
-                ? ((funnelData[i + 1].count / funnelData[i].count) * 100).toFixed(0) : null
-              return (
-                <div key={f.estado} className="funnel-row">
-                  <div className="funnel-label">
-                    <span className="funnel-name">{f.label}</span>
-                    <span className="funnel-count">{f.count} {f.value > 0 ? `· ${fmt$(f.value)}` : ''}</span>
-                  </div>
-                  <div className="funnel-bar-track">
-                    <div className="funnel-bar" style={{ width: `${pct}%`, background: f.color }}></div>
-                  </div>
-                  {convNext && <div className="funnel-conv">↓ {convNext}%</div>}
-                </div>
-              )
-            })}
-            <div className="funnel-row">
-              <div className="funnel-label"><span className="funnel-name">Perdidos</span><span className="funnel-count">{leads.filter(l => l.estado === 'perdido').length}</span></div>
-              <div className="funnel-bar-track"><div className="funnel-bar" style={{ width: `${(leads.filter(l => l.estado === 'perdido').length / maxFunnel * 100).toFixed(0)}%`, background: STATUS_COLORS.perdido }}></div></div>
+      {/* Leads por Día (admin) — FEATURED SECTION */}
+      {isAdmin && (
+        <>
+          {/* Mini KPIs for leads per day */}
+          <div className="lpd-summary-row">
+            <div className="lpd-summary-card">
+              <div className="lpd-summary-value">{leadsHoy}</div>
+              <div className="lpd-summary-label">Leads hoy</div>
+            </div>
+            <div className="lpd-summary-card">
+              <div className="lpd-summary-value">{totalInRange}</div>
+              <div className="lpd-summary-label">Últimos {daysRange} días</div>
+            </div>
+            <div className="lpd-summary-card">
+              <div className="lpd-summary-value">{avgPerDay}</div>
+              <div className="lpd-summary-label">Promedio diario</div>
+            </div>
+            {bestDay.count > 0 && (
+              <div className="lpd-summary-card lpd-summary-highlight">
+                <div className="lpd-summary-value">{bestDay.count}</div>
+                <div className="lpd-summary-label">Mejor día · {bestDay.dayName} {bestDay.fullDate}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Chart card */}
+          <div className="card">
+            <div className="card-header">
+              <h3><CalendarDays size={18} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} />Leads por Día</h3>
+              <select className="filter-select" value={daysRange} onChange={e => setDaysRange(Number(e.target.value))}>
+                <option value={7}>7 días</option>
+                <option value={14}>14 días</option>
+                <option value={30}>30 días</option>
+                <option value={60}>60 días</option>
+                <option value={90}>90 días</option>
+              </select>
+            </div>
+            <div className="card-body">
+              <div className="leads-per-day-chart">
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#EBEBF0" vertical={false} />
+                    <XAxis
+                      dataKey="chartLabel"
+                      tick={{ fontSize: 11, fill: '#8E8E93' }}
+                      interval={daysRange <= 14 ? 0 : daysRange <= 30 ? 2 : 6}
+                      angle={daysRange > 14 ? -45 : 0}
+                      textAnchor={daysRange > 14 ? 'end' : 'middle'}
+                      height={daysRange > 14 ? 50 : 30}
+                      axisLine={{ stroke: '#EBEBF0' }}
+                      tickLine={false}
+                    />
+                    <YAxis tick={{ fontSize: 11, fill: '#8E8E93' }} allowDecimals={false} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(0,122,255,0.04)' }}
+                      contentStyle={{ background: '#fff', border: '1px solid #EBEBF0', borderRadius: '10px', fontSize: '0.8125rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                      formatter={(value) => [`${value} lead${value !== 1 ? 's' : ''}`, 'Cantidad']}
+                      labelFormatter={(label) => `${label}`}
+                    />
+                    <Bar dataKey="count" fill="#007AFF" radius={[6, 6, 0, 0]} maxBarSize={32} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Citas Hoy / Temperature */}
+          {/* Daily breakdown accordion */}
+          <div className="card">
+            <div className="card-header">
+              <h3>Detalle por Día</h3>
+              <span className="lpd-header-count">{totalInRange} leads en {daysRange} días · {daysWithLeads} días activos</span>
+            </div>
+            <div className="card-body-flush">
+              {daysWithLeads === 0 ? (
+                <div className="empty-state" style={{ padding: '40px 20px' }}><p>No hay leads en este período</p></div>
+              ) : (
+                <div className="lpd-day-list">
+                  {dailyData.map(day => {
+                    if (day.count === 0) return null
+                    const isExpanded = expandedDays[day.key]
+                    // Count statuses
+                    const counts = {}
+                    day.leads.forEach(l => { counts[l.estado] = (counts[l.estado] || 0) + 1 })
+                    return (
+                      <div key={day.key} className={`lpd-day-block ${isExpanded ? 'expanded' : ''}`}>
+                        <div className="lpd-day-header" onClick={() => toggleDay(day.key)}>
+                          <div className="lpd-day-left">
+                            <span className="lpd-day-toggle">
+                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </span>
+                            <div className="lpd-day-date">
+                              <span className="lpd-day-name">{day.dayName}</span>
+                              <span className="lpd-day-full">{day.fullDate}</span>
+                            </div>
+                          </div>
+                          <div className="lpd-day-right">
+                            <div className="lpd-day-badges">
+                              {Object.entries(counts).map(([estado, n]) => (
+                                <span key={estado} className={`badge badge-${estado}`}>{n} {STATUS_LABELS[estado]}</span>
+                              ))}
+                            </div>
+                            <span className="lpd-total-badge">{day.count}</span>
+                          </div>
+                        </div>
+                        {isExpanded && (
+                          <div className="lpd-day-body">
+                            <table className="data-table">
+                              <thead>
+                                <tr>
+                                  <th>Nombre</th>
+                                  <th>Teléfono</th>
+                                  <th>Modelo</th>
+                                  <th>Estado</th>
+                                  <th>Presupuesto</th>
+                                  <th>Vendedor</th>
+                                  <th>Hora</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {[...day.leads]
+                                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                                  .map(l => (
+                                  <tr key={l.id} className="clickable" onClick={() => navigate(`/leads/${l.id}`)}>
+                                    <td className="table-cell-primary">{l.nombre}</td>
+                                    <td>{l.telefono || '-'}</td>
+                                    <td>{l.modelo_interes || '-'}</td>
+                                    <td><span className={`badge badge-${l.estado}`}>{STATUS_LABELS[l.estado]}</span></td>
+                                    <td>{fmt$(l.presupuesto_estimado)}</td>
+                                    <td className="table-cell-secondary">{l.vendedor?.full_name || '-'}</td>
+                                    <td className="table-cell-secondary">{new Date(l.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Citas Hoy / Temperature */}
+      <div className="grid-2">
         <div className="card">
           <div className="card-header">
             <h3>{citasHoy.length > 0 ? `📅 Citas Hoy (${citasHoy.length})` : '🌡️ Temperatura de Leads'}</h3>
@@ -363,10 +477,8 @@ export default function DashboardPage() {
             )) : <div className="empty-state"><p>Sin leads activos</p></div>}
           </div>
         </div>
-      </div>
 
-      {/* Activity + Ranking/Chart */}
-      <div className="grid-2">
+        {/* Activity */}
         <div className="card">
           <div className="card-header"><h3>{isAdmin ? 'Actividad Reciente' : 'Mi Actividad'}</h3></div>
           <div className="card-body">
@@ -388,203 +500,49 @@ export default function DashboardPage() {
             }) : <div className="empty-state"><p>Sin actividad</p></div>}
           </div>
         </div>
-
-        {isAdmin && vendorRanking.length > 0 ? (
-          <div className="card">
-            <div className="card-header"><h3>Ranking Vendedores</h3></div>
-            <div className="card-body-flush">
-              <table className="data-table">
-                <thead><tr><th>#</th><th>Vendedor</th><th>Leads</th><th>Ventas</th><th>Conv.</th><th>Revenue</th></tr></thead>
-                <tbody>
-                  {vendorRanking.map((v, i) => (
-                    <tr key={i}>
-                      <td><span className={`leaderboard-rank ${i === 0 ? 'gold' : i === 1 ? 'silver' : 'bronze'}`}>{i + 1}</span></td>
-                      <td className="table-cell-primary">{v.name}</td>
-                      <td>{v.leads}</td>
-                      <td>{v.ventas}</td>
-                      <td>{v.leads > 0 ? ((v.ventas / v.leads) * 100).toFixed(0) : 0}%</td>
-                      <td>{fmt$(v.revenue)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : !isAdmin && (
-          <div className="card">
-            <div className="card-header"><h3>Mi Rendimiento</h3></div>
-            <div className="card-body">
-              {pieData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}`}>
-                      {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : <div className="empty-state"><p>Sin datos</p></div>}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Leads por Día (admin only) */}
-      {isAdmin && (
-        <>
-          {/* Summary KPIs */}
-          <div className="lpd-summary-row">
-            <div className="lpd-summary-card">
-              <div className="lpd-summary-value">{totalInRange}</div>
-              <div className="lpd-summary-label">Total leads ({daysRange}d)</div>
-            </div>
-            <div className="lpd-summary-card">
-              <div className="lpd-summary-value">{avgPerDay}</div>
-              <div className="lpd-summary-label">Promedio / día</div>
-            </div>
-            <div className="lpd-summary-card">
-              <div className="lpd-summary-value">{daysWithLeads}</div>
-              <div className="lpd-summary-label">Días con leads</div>
-            </div>
-            {bestDay.count > 0 && (
-              <div className="lpd-summary-card lpd-summary-highlight">
-                <div className="lpd-summary-value">{bestDay.count}</div>
-                <div className="lpd-summary-label">📈 Mejor día: {bestDay.dayName} {bestDay.dateLabel}</div>
-              </div>
-            )}
+      {/* Vendor Ranking (admin) / My Performance (employee) */}
+      {isAdmin && vendorRanking.length > 0 && (
+        <div className="card">
+          <div className="card-header"><h3>Ranking Vendedores</h3></div>
+          <div className="card-body-flush">
+            <table className="data-table">
+              <thead><tr><th>#</th><th>Vendedor</th><th>Leads</th><th>Ventas</th><th>Conv.</th><th>Revenue</th></tr></thead>
+              <tbody>
+                {vendorRanking.map((v, i) => (
+                  <tr key={i}>
+                    <td><span className={`leaderboard-rank ${i === 0 ? 'gold' : i === 1 ? 'silver' : 'bronze'}`}>{i + 1}</span></td>
+                    <td className="table-cell-primary">{v.name}</td>
+                    <td>{v.leads}</td>
+                    <td>{v.ventas}</td>
+                    <td>{v.leads > 0 ? ((v.ventas / v.leads) * 100).toFixed(0) : 0}%</td>
+                    <td>{fmt$(v.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        </div>
+      )}
 
-          {/* Chart */}
-          <div className="card">
-            <div className="card-header">
-              <h3><CalendarDays size={18} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} />Leads por Día</h3>
-              <select className="filter-select" value={daysRange} onChange={e => setDaysRange(Number(e.target.value))}>
-                <option value={7}>Últimos 7 días</option>
-                <option value={14}>Últimos 14 días</option>
-                <option value={30}>Últimos 30 días</option>
-                <option value={60}>Últimos 60 días</option>
-                <option value={90}>Últimos 90 días</option>
-              </select>
-            </div>
-            <div className="card-body">
-              <div className="leads-per-day-chart">
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#EBEBF0" vertical={false} />
-                    <XAxis
-                      dataKey="shortLabel"
-                      tick={{ fontSize: 11, fill: '#8E8E93' }}
-                      interval={daysRange <= 14 ? 0 : daysRange <= 30 ? 2 : 6}
-                      angle={daysRange > 14 ? -45 : 0}
-                      textAnchor={daysRange > 14 ? 'end' : 'middle'}
-                      height={daysRange > 14 ? 50 : 30}
-                      axisLine={{ stroke: '#EBEBF0' }}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: '#8E8E93' }}
-                      allowDecimals={false}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      cursor={{ fill: 'rgba(0,122,255,0.04)' }}
-                      contentStyle={{
-                        background: '#fff',
-                        border: '1px solid #EBEBF0',
-                        borderRadius: '8px',
-                        fontSize: '0.8125rem',
-                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
-                      }}
-                      formatter={(value) => [`${value} lead${value !== 1 ? 's' : ''}`, 'Cantidad']}
-                      labelFormatter={(label) => `Fecha: ${label}`}
-                    />
-                    <Bar dataKey="count" fill="#007AFF" radius={[4, 4, 0, 0]} maxBarSize={36} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+      {!isAdmin && (
+        <div className="card">
+          <div className="card-header"><h3>Mi Rendimiento</h3></div>
+          <div className="card-body">
+            {pieData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value"
+                    label={({ name, value }) => `${name}: ${value}`}>
+                    {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : <div className="empty-state"><p>Sin datos</p></div>}
           </div>
-
-          {/* Daily breakdown list */}
-          <div className="card">
-            <div className="card-header">
-              <h3>Detalle Diario — {totalInRange} leads en {daysRange} días</h3>
-            </div>
-            <div className="card-body-flush">
-              {dailyData.filter(d => d.count > 0).length === 0 ? (
-                <div className="empty-state" style={{ padding: '40px 20px' }}><p>No hay leads en este período</p></div>
-              ) : (
-                <div className="lpd-day-list">
-                  {dailyData.map(day => {
-                    if (day.count === 0) return null
-                    const isExpanded = expandedDays[day.key]
-                    return (
-                      <div key={day.key} className={`lpd-day-block ${isExpanded ? 'expanded' : ''}`}>
-                        <div className="lpd-day-header" onClick={() => toggleDay(day.key)}>
-                          <div className="lpd-day-left">
-                            <span className="lpd-day-toggle">
-                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                            </span>
-                            <div className="lpd-day-date">
-                              <span className="lpd-day-name">{day.dayName}</span>
-                              <span className="lpd-day-full">{day.dateLabel}</span>
-                            </div>
-                          </div>
-                          <div className="lpd-day-right">
-                            <span className="lpd-total-badge">{day.count} lead{day.count !== 1 ? 's' : ''}</span>
-                            <div className="lpd-day-badges">
-                              {(() => {
-                                const counts = {}
-                                day.leads.forEach(l => { counts[l.estado] = (counts[l.estado] || 0) + 1 })
-                                return Object.entries(counts).map(([estado, n]) => (
-                                  <span key={estado} className={`badge badge-${estado}`}>{n} {STATUS_LABELS[estado]}</span>
-                                ))
-                              })()}
-                            </div>
-                          </div>
-                        </div>
-                        {isExpanded && (
-                          <div className="lpd-day-body">
-                            <table className="data-table">
-                              <thead>
-                                <tr>
-                                  <th>Nombre</th>
-                                  <th>Teléfono</th>
-                                  <th>Modelo</th>
-                                  <th>Estado</th>
-                                  <th>Presupuesto</th>
-                                  <th>Vendedor</th>
-                                  <th>Hora</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {day.leads
-                                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                                  .map(l => (
-                                  <tr key={l.id} className="clickable" onClick={() => navigate(`/leads/${l.id}`)}>
-                                    <td className="table-cell-primary">{l.nombre}</td>
-                                    <td>{l.telefono || '-'}</td>
-                                    <td>{l.modelo_interes || '-'}</td>
-                                    <td><span className={`badge badge-${l.estado}`}>{STATUS_LABELS[l.estado]}</span></td>
-                                    <td>{fmt$(l.presupuesto_estimado)}</td>
-                                    <td className="table-cell-secondary">{l.vendedor?.full_name || '-'}</td>
-                                    <td className="table-cell-secondary">{new Date(l.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </>
+        </div>
       )}
     </div>
   )

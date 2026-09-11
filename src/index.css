@@ -3027,13 +3027,6 @@ body {
   margin-bottom: 20px;
 }
 
-.lpd-summary-card {
-  background: var(--white);
-  border: 1px solid var(--gray-200);
-  border-radius: var(--radius-lg);
-  padding: 16px 20px;
-  text-align: center;
-}
 
 .lpd-summary-card.lpd-summary-highlight {
   border-color: var(--primary);
@@ -3062,6 +3055,26 @@ body {
 /* Chart */
 .leads-per-day-chart {
   padding: 4px 0;
+}
+
+.lpd-header-count {
+  font-size: 0.8125rem;
+  color: var(--gray-400);
+  font-weight: 500;
+}
+
+.lpd-summary-card {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  text-align: center;
+  transition: box-shadow var(--duration) var(--ease), transform var(--duration) var(--ease);
+}
+
+.lpd-summary-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 /* Day list (accordion) */
