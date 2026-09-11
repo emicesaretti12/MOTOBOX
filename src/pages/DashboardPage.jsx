@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import { Users, TrendingUp, Target, Award, DollarSign, ChevronRight, Phone, MessageCircle, Calendar, AlertTriangle, Flame, Snowflake, Clock, Zap } from 'lucide-react'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { Users, TrendingUp, Target, Award, DollarSign, ChevronRight, Phone, MessageCircle, Calendar, AlertTriangle, Flame, Snowflake, Clock, Zap, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const STATUS_COLORS = { nuevo: '#2563EB', contactado: '#D97706', en_negociacion: '#7C3AED', venta_cerrada: '#16A34A', perdido: '#71717A' }
@@ -51,6 +51,8 @@ export default function DashboardPage() {
   const [leads, setLeads] = useState([])
   const [interacciones, setInteracciones] = useState([])
   const [loading, setLoading] = useState(true)
+  const [expandedDays, setExpandedDays] = useState({})
+  const [daysRange, setDaysRange] = useState(30)
 
   useEffect(() => {
     fetchData()
@@ -184,6 +186,46 @@ export default function DashboardPage() {
     })
     return Object.values(map).sort((a, b) => b.ventas - a.ventas)
   }, [leads, isAdmin])
+
+  // Leads per day (admin only)
+  const leadsPerDay = useMemo(() => {
+    if (!isAdmin) return []
+    const map = {}
+    leads.forEach(l => {
+      const dateStr = new Date(l.created_at).toLocaleDateString('es-AR', { year: 'numeric', month: '2-digit', day: '2-digit' })
+      const sortKey = new Date(l.created_at).toISOString().slice(0, 10)
+      if (!map[sortKey]) map[sortKey] = { sortKey, dateStr, leads: [], count: 0 }
+      map[sortKey].leads.push(l)
+      map[sortKey].count++
+    })
+    return Object.values(map)
+      .sort((a, b) => b.sortKey.localeCompare(a.sortKey))
+  }, [leads, isAdmin])
+
+  // Chart data for bar chart (last N days)
+  const chartData = useMemo(() => {
+    if (!isAdmin) return []
+    const now = new Date()
+    const days = []
+    for (let i = daysRange - 1; i >= 0; i--) {
+      const d = new Date(now)
+      d.setDate(d.getDate() - i)
+      const key = d.toISOString().slice(0, 10)
+      const dayLabel = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+      const found = leadsPerDay.find(p => p.sortKey === key)
+      days.push({ date: dayLabel, count: found ? found.count : 0, sortKey: key })
+    }
+    return days
+  }, [leadsPerDay, daysRange, isAdmin])
+
+  // Total leads in selected range
+  const totalInRange = useMemo(() => chartData.reduce((s, d) => s + d.count, 0), [chartData])
+  const avgPerDay = useMemo(() => chartData.length > 0 ? (totalInRange / chartData.length).toFixed(1) : '0', [totalInRange, chartData])
+  const bestDay = useMemo(() => chartData.reduce((best, d) => d.count > best.count ? d : best, { count: 0 }), [chartData])
+
+  function toggleDay(sortKey) {
+    setExpandedDays(prev => ({ ...prev, [sortKey]: !prev[sortKey] }))
+  }
 
   if (loading) return <div className="spinner-overlay"><div className="spinner" /></div>
 
@@ -365,6 +407,123 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Leads por Día (admin only) */}
+      {isAdmin && (
+        <div className="card leads-per-day-section">
+          <div className="card-header">
+            <h3><CalendarDays size={18} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} />Leads por Día</h3>
+            <div className="leads-per-day-controls">
+              <div className="leads-per-day-stats">
+                <span className="lpd-stat"><strong>{totalInRange}</strong> leads en {daysRange} días</span>
+                <span className="lpd-stat">Promedio: <strong>{avgPerDay}</strong>/día</span>
+                {bestDay.count > 0 && <span className="lpd-stat">Mejor día: <strong>{bestDay.date}</strong> ({bestDay.count})</span>}
+              </div>
+              <select className="filter-select" value={daysRange} onChange={e => setDaysRange(Number(e.target.value))}>
+                <option value={7}>Últimos 7 días</option>
+                <option value={14}>Últimos 14 días</option>
+                <option value={30}>Últimos 30 días</option>
+                <option value={60}>Últimos 60 días</option>
+                <option value={90}>Últimos 90 días</option>
+              </select>
+            </div>
+          </div>
+          <div className="card-body">
+            {/* Bar Chart */}
+            <div className="leads-per-day-chart">
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--gray-200)" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: 'var(--gray-500)' }}
+                    interval={daysRange <= 14 ? 0 : daysRange <= 30 ? 2 : 6}
+                    angle={daysRange > 14 ? -45 : 0}
+                    textAnchor={daysRange > 14 ? 'end' : 'middle'}
+                    height={daysRange > 14 ? 50 : 30}
+                  />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--gray-500)' }} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ background: 'var(--white)', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem' }}
+                    formatter={(value) => [`${value} leads`, 'Cantidad']}
+                    labelFormatter={(label) => `Fecha: ${label}`}
+                  />
+                  <Bar dataKey="count" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Daily table */}
+            <div className="leads-per-day-table">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 40 }}></th>
+                    <th>Fecha</th>
+                    <th>Total Leads</th>
+                    <th>Nuevos</th>
+                    <th>Contactados</th>
+                    <th>En Negociación</th>
+                    <th>Ventas</th>
+                    <th>Perdidos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leadsPerDay.filter(day => {
+                    const cutoff = new Date()
+                    cutoff.setDate(cutoff.getDate() - daysRange)
+                    return new Date(day.sortKey) >= cutoff
+                  }).map(day => {
+                    const isExpanded = expandedDays[day.sortKey]
+                    const statusCounts = {
+                      nuevo: day.leads.filter(l => l.estado === 'nuevo').length,
+                      contactado: day.leads.filter(l => l.estado === 'contactado').length,
+                      en_negociacion: day.leads.filter(l => l.estado === 'en_negociacion').length,
+                      venta_cerrada: day.leads.filter(l => l.estado === 'venta_cerrada').length,
+                      perdido: day.leads.filter(l => l.estado === 'perdido').length,
+                    }
+                    return (
+                      <React.Fragment key={day.sortKey}>
+                        <tr className="lpd-day-row clickable" onClick={() => toggleDay(day.sortKey)}>
+                          <td>
+                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          </td>
+                          <td className="table-cell-primary">{day.dateStr}</td>
+                          <td><span className="lpd-total-badge">{day.count}</span></td>
+                          <td>{statusCounts.nuevo > 0 ? <span className="badge badge-nuevo">{statusCounts.nuevo}</span> : <span className="text-muted">-</span>}</td>
+                          <td>{statusCounts.contactado > 0 ? <span className="badge badge-contactado">{statusCounts.contactado}</span> : <span className="text-muted">-</span>}</td>
+                          <td>{statusCounts.en_negociacion > 0 ? <span className="badge badge-en_negociacion">{statusCounts.en_negociacion}</span> : <span className="text-muted">-</span>}</td>
+                          <td>{statusCounts.venta_cerrada > 0 ? <span className="badge badge-venta_cerrada">{statusCounts.venta_cerrada}</span> : <span className="text-muted">-</span>}</td>
+                          <td>{statusCounts.perdido > 0 ? <span className="badge badge-perdido">{statusCounts.perdido}</span> : <span className="text-muted">-</span>}</td>
+                        </tr>
+                        {isExpanded && day.leads.map(l => (
+                          <tr key={l.id} className="lpd-lead-row clickable" onClick={() => navigate(`/leads/${l.id}`)}>
+                            <td></td>
+                            <td className="table-cell-secondary" style={{ paddingLeft: 24 }}>{l.nombre}</td>
+                            <td>{l.telefono || '-'}</td>
+                            <td>{l.modelo_interes || '-'}</td>
+                            <td><span className={`badge badge-${l.estado}`}>{STATUS_LABELS[l.estado]}</span></td>
+                            <td>{fmt$(l.presupuesto_estimado)}</td>
+                            <td className="table-cell-secondary">{l.vendedor?.full_name || '-'}</td>
+                            <td className="table-cell-secondary">{new Date(l.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    )
+                  })}
+                  {leadsPerDay.filter(day => {
+                    const cutoff = new Date()
+                    cutoff.setDate(cutoff.getDate() - daysRange)
+                    return new Date(day.sortKey) >= cutoff
+                  }).length === 0 && (
+                    <tr><td colSpan={8}><div className="empty-state"><p>No hay leads en este período</p></div></td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
