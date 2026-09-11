@@ -14,16 +14,15 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [stats, setStats] = useState(null)
 
-  useEffect(() => { if (profile?.id) fetchStats() }, [profile])
+  useEffect(() => { if (profile?.id) fetchStats(isAdmin) }, [profile, isAdmin])
 
-  async function fetchStats() {
+  async function fetchStats(admin) {
     try {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
-      const todayISO = today.toISOString()
 
       let leadsQuery = supabase.from('leads').select('estado, presupuesto_estimado, created_at')
-      if (!isAdmin) {
+      if (!admin) {
         leadsQuery = leadsQuery.eq('vendedor_asignado', profile.id)
       }
 
