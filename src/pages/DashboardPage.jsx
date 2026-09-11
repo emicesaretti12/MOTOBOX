@@ -187,44 +187,66 @@ export default function DashboardPage() {
     return Object.values(map).sort((a, b) => b.ventas - a.ventas)
   }, [leads, isAdmin])
 
-  // Leads per day (admin only)
+  // Helper: local date key (YYYY-MM-DD) — avoids UTC shift from toISOString
+  function localDateKey(dateStr) {
+    const d = new Date(dateStr)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  function localDateKeyFromDate(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  // Leads per day (admin only) — grouped by LOCAL date
   const leadsPerDay = useMemo(() => {
-    if (!isAdmin) return []
+    if (!isAdmin) return {}
     const map = {}
     leads.forEach(l => {
-      const dateStr = new Date(l.created_at).toLocaleDateString('es-AR', { year: 'numeric', month: '2-digit', day: '2-digit' })
-      const sortKey = new Date(l.created_at).toISOString().slice(0, 10)
-      if (!map[sortKey]) map[sortKey] = { sortKey, dateStr, leads: [], count: 0 }
-      map[sortKey].leads.push(l)
-      map[sortKey].count++
+      const key = localDateKey(l.created_at)
+      if (!map[key]) map[key] = []
+      map[key].push(l)
     })
-    return Object.values(map)
-      .sort((a, b) => b.sortKey.localeCompare(a.sortKey))
+    return map
   }, [leads, isAdmin])
 
-  // Chart data for bar chart (last N days)
-  const chartData = useMemo(() => {
+  // Build daily data for the selected range
+  const dailyData = useMemo(() => {
     if (!isAdmin) return []
+    const result = []
     const now = new Date()
-    const days = []
-    for (let i = daysRange - 1; i >= 0; i--) {
+    for (let i = 0; i < daysRange; i++) {
       const d = new Date(now)
       d.setDate(d.getDate() - i)
-      const key = d.toISOString().slice(0, 10)
-      const dayLabel = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
-      const found = leadsPerDay.find(p => p.sortKey === key)
-      days.push({ date: dayLabel, count: found ? found.count : 0, sortKey: key })
+      const key = localDateKeyFromDate(d)
+      const dayLeads = leadsPerDay[key] || []
+      const isToday = i === 0
+      const isYesterday = i === 1
+      const weekday = d.toLocaleDateString('es-AR', { weekday: 'short' })
+      const dateLabel = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      const shortLabel = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+      result.push({
+        key,
+        dateLabel,
+        shortLabel,
+        dayName: isToday ? 'Hoy' : isYesterday ? 'Ayer' : weekday.charAt(0).toUpperCase() + weekday.slice(1),
+        leads: dayLeads,
+        count: dayLeads.length,
+      })
     }
-    return days
+    return result
   }, [leadsPerDay, daysRange, isAdmin])
 
-  // Total leads in selected range
-  const totalInRange = useMemo(() => chartData.reduce((s, d) => s + d.count, 0), [chartData])
-  const avgPerDay = useMemo(() => chartData.length > 0 ? (totalInRange / chartData.length).toFixed(1) : '0', [totalInRange, chartData])
-  const bestDay = useMemo(() => chartData.reduce((best, d) => d.count > best.count ? d : best, { count: 0 }), [chartData])
+  // Chart data (reversed for chronological order left→right)
+  const chartData = useMemo(() => [...dailyData].reverse(), [dailyData])
 
-  function toggleDay(sortKey) {
-    setExpandedDays(prev => ({ ...prev, [sortKey]: !prev[sortKey] }))
+  // Summary stats
+  const totalInRange = useMemo(() => dailyData.reduce((s, d) => s + d.count, 0), [dailyData])
+  const daysWithLeads = useMemo(() => dailyData.filter(d => d.count > 0).length, [dailyData])
+  const avgPerDay = daysRange > 0 ? (totalInRange / daysRange).toFixed(1) : '0'
+  const bestDay = useMemo(() => dailyData.reduce((best, d) => d.count > best.count ? d : best, { count: 0, dayName: '', dateLabel: '' }), [dailyData])
+
+  function toggleDay(key) {
+    setExpandedDays(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
   if (loading) return <div className="spinner-overlay"><div className="spinner" /></div>
@@ -410,15 +432,33 @@ export default function DashboardPage() {
 
       {/* Leads por Día (admin only) */}
       {isAdmin && (
-        <div className="card leads-per-day-section">
-          <div className="card-header">
-            <h3><CalendarDays size={18} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} />Leads por Día</h3>
-            <div className="leads-per-day-controls">
-              <div className="leads-per-day-stats">
-                <span className="lpd-stat"><strong>{totalInRange}</strong> leads en {daysRange} días</span>
-                <span className="lpd-stat">Promedio: <strong>{avgPerDay}</strong>/día</span>
-                {bestDay.count > 0 && <span className="lpd-stat">Mejor día: <strong>{bestDay.date}</strong> ({bestDay.count})</span>}
+        <>
+          {/* Summary KPIs */}
+          <div className="lpd-summary-row">
+            <div className="lpd-summary-card">
+              <div className="lpd-summary-value">{totalInRange}</div>
+              <div className="lpd-summary-label">Total leads ({daysRange}d)</div>
+            </div>
+            <div className="lpd-summary-card">
+              <div className="lpd-summary-value">{avgPerDay}</div>
+              <div className="lpd-summary-label">Promedio / día</div>
+            </div>
+            <div className="lpd-summary-card">
+              <div className="lpd-summary-value">{daysWithLeads}</div>
+              <div className="lpd-summary-label">Días con leads</div>
+            </div>
+            {bestDay.count > 0 && (
+              <div className="lpd-summary-card lpd-summary-highlight">
+                <div className="lpd-summary-value">{bestDay.count}</div>
+                <div className="lpd-summary-label">📈 Mejor día: {bestDay.dayName} {bestDay.dateLabel}</div>
               </div>
+            )}
+          </div>
+
+          {/* Chart */}
+          <div className="card">
+            <div className="card-header">
+              <h3><CalendarDays size={18} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} />Leads por Día</h3>
               <select className="filter-select" value={daysRange} onChange={e => setDaysRange(Number(e.target.value))}>
                 <option value={7}>Últimos 7 días</option>
                 <option value={14}>Últimos 14 días</option>
@@ -427,102 +467,124 @@ export default function DashboardPage() {
                 <option value={90}>Últimos 90 días</option>
               </select>
             </div>
-          </div>
-          <div className="card-body">
-            {/* Bar Chart */}
-            <div className="leads-per-day-chart">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--gray-200)" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 11, fill: 'var(--gray-500)' }}
-                    interval={daysRange <= 14 ? 0 : daysRange <= 30 ? 2 : 6}
-                    angle={daysRange > 14 ? -45 : 0}
-                    textAnchor={daysRange > 14 ? 'end' : 'middle'}
-                    height={daysRange > 14 ? 50 : 30}
-                  />
-                  <YAxis tick={{ fontSize: 11, fill: 'var(--gray-500)' }} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{ background: 'var(--white)', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem' }}
-                    formatter={(value) => [`${value} leads`, 'Cantidad']}
-                    labelFormatter={(label) => `Fecha: ${label}`}
-                  />
-                  <Bar dataKey="count" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="card-body">
+              <div className="leads-per-day-chart">
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#EBEBF0" vertical={false} />
+                    <XAxis
+                      dataKey="shortLabel"
+                      tick={{ fontSize: 11, fill: '#8E8E93' }}
+                      interval={daysRange <= 14 ? 0 : daysRange <= 30 ? 2 : 6}
+                      angle={daysRange > 14 ? -45 : 0}
+                      textAnchor={daysRange > 14 ? 'end' : 'middle'}
+                      height={daysRange > 14 ? 50 : 30}
+                      axisLine={{ stroke: '#EBEBF0' }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#8E8E93' }}
+                      allowDecimals={false}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(0,122,255,0.04)' }}
+                      contentStyle={{
+                        background: '#fff',
+                        border: '1px solid #EBEBF0',
+                        borderRadius: '8px',
+                        fontSize: '0.8125rem',
+                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+                      }}
+                      formatter={(value) => [`${value} lead${value !== 1 ? 's' : ''}`, 'Cantidad']}
+                      labelFormatter={(label) => `Fecha: ${label}`}
+                    />
+                    <Bar dataKey="count" fill="#007AFF" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
+          </div>
 
-            {/* Daily table */}
-            <div className="leads-per-day-table">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 40 }}></th>
-                    <th>Fecha</th>
-                    <th>Total Leads</th>
-                    <th>Nuevos</th>
-                    <th>Contactados</th>
-                    <th>En Negociación</th>
-                    <th>Ventas</th>
-                    <th>Perdidos</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leadsPerDay.filter(day => {
-                    const cutoff = new Date()
-                    cutoff.setDate(cutoff.getDate() - daysRange)
-                    return new Date(day.sortKey) >= cutoff
-                  }).map(day => {
-                    const isExpanded = expandedDays[day.sortKey]
-                    const statusCounts = {
-                      nuevo: day.leads.filter(l => l.estado === 'nuevo').length,
-                      contactado: day.leads.filter(l => l.estado === 'contactado').length,
-                      en_negociacion: day.leads.filter(l => l.estado === 'en_negociacion').length,
-                      venta_cerrada: day.leads.filter(l => l.estado === 'venta_cerrada').length,
-                      perdido: day.leads.filter(l => l.estado === 'perdido').length,
-                    }
+          {/* Daily breakdown list */}
+          <div className="card">
+            <div className="card-header">
+              <h3>Detalle Diario — {totalInRange} leads en {daysRange} días</h3>
+            </div>
+            <div className="card-body-flush">
+              {dailyData.filter(d => d.count > 0).length === 0 ? (
+                <div className="empty-state" style={{ padding: '40px 20px' }}><p>No hay leads en este período</p></div>
+              ) : (
+                <div className="lpd-day-list">
+                  {dailyData.map(day => {
+                    if (day.count === 0) return null
+                    const isExpanded = expandedDays[day.key]
                     return (
-                      <React.Fragment key={day.sortKey}>
-                        <tr className="lpd-day-row clickable" onClick={() => toggleDay(day.sortKey)}>
-                          <td>
-                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                          </td>
-                          <td className="table-cell-primary">{day.dateStr}</td>
-                          <td><span className="lpd-total-badge">{day.count}</span></td>
-                          <td>{statusCounts.nuevo > 0 ? <span className="badge badge-nuevo">{statusCounts.nuevo}</span> : <span className="text-muted">-</span>}</td>
-                          <td>{statusCounts.contactado > 0 ? <span className="badge badge-contactado">{statusCounts.contactado}</span> : <span className="text-muted">-</span>}</td>
-                          <td>{statusCounts.en_negociacion > 0 ? <span className="badge badge-en_negociacion">{statusCounts.en_negociacion}</span> : <span className="text-muted">-</span>}</td>
-                          <td>{statusCounts.venta_cerrada > 0 ? <span className="badge badge-venta_cerrada">{statusCounts.venta_cerrada}</span> : <span className="text-muted">-</span>}</td>
-                          <td>{statusCounts.perdido > 0 ? <span className="badge badge-perdido">{statusCounts.perdido}</span> : <span className="text-muted">-</span>}</td>
-                        </tr>
-                        {isExpanded && day.leads.map(l => (
-                          <tr key={l.id} className="lpd-lead-row clickable" onClick={() => navigate(`/leads/${l.id}`)}>
-                            <td></td>
-                            <td className="table-cell-secondary" style={{ paddingLeft: 24 }}>{l.nombre}</td>
-                            <td>{l.telefono || '-'}</td>
-                            <td>{l.modelo_interes || '-'}</td>
-                            <td><span className={`badge badge-${l.estado}`}>{STATUS_LABELS[l.estado]}</span></td>
-                            <td>{fmt$(l.presupuesto_estimado)}</td>
-                            <td className="table-cell-secondary">{l.vendedor?.full_name || '-'}</td>
-                            <td className="table-cell-secondary">{new Date(l.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</td>
-                          </tr>
-                        ))}
-                      </React.Fragment>
+                      <div key={day.key} className={`lpd-day-block ${isExpanded ? 'expanded' : ''}`}>
+                        <div className="lpd-day-header" onClick={() => toggleDay(day.key)}>
+                          <div className="lpd-day-left">
+                            <span className="lpd-day-toggle">
+                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </span>
+                            <div className="lpd-day-date">
+                              <span className="lpd-day-name">{day.dayName}</span>
+                              <span className="lpd-day-full">{day.dateLabel}</span>
+                            </div>
+                          </div>
+                          <div className="lpd-day-right">
+                            <span className="lpd-total-badge">{day.count} lead{day.count !== 1 ? 's' : ''}</span>
+                            <div className="lpd-day-badges">
+                              {(() => {
+                                const counts = {}
+                                day.leads.forEach(l => { counts[l.estado] = (counts[l.estado] || 0) + 1 })
+                                return Object.entries(counts).map(([estado, n]) => (
+                                  <span key={estado} className={`badge badge-${estado}`}>{n} {STATUS_LABELS[estado]}</span>
+                                ))
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+                        {isExpanded && (
+                          <div className="lpd-day-body">
+                            <table className="data-table">
+                              <thead>
+                                <tr>
+                                  <th>Nombre</th>
+                                  <th>Teléfono</th>
+                                  <th>Modelo</th>
+                                  <th>Estado</th>
+                                  <th>Presupuesto</th>
+                                  <th>Vendedor</th>
+                                  <th>Hora</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {day.leads
+                                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                                  .map(l => (
+                                  <tr key={l.id} className="clickable" onClick={() => navigate(`/leads/${l.id}`)}>
+                                    <td className="table-cell-primary">{l.nombre}</td>
+                                    <td>{l.telefono || '-'}</td>
+                                    <td>{l.modelo_interes || '-'}</td>
+                                    <td><span className={`badge badge-${l.estado}`}>{STATUS_LABELS[l.estado]}</span></td>
+                                    <td>{fmt$(l.presupuesto_estimado)}</td>
+                                    <td className="table-cell-secondary">{l.vendedor?.full_name || '-'}</td>
+                                    <td className="table-cell-secondary">{new Date(l.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
                     )
                   })}
-                  {leadsPerDay.filter(day => {
-                    const cutoff = new Date()
-                    cutoff.setDate(cutoff.getDate() - daysRange)
-                    return new Date(day.sortKey) >= cutoff
-                  }).length === 0 && (
-                    <tr><td colSpan={8}><div className="empty-state"><p>No hay leads en este período</p></div></td></tr>
-                  )}
-                </tbody>
-              </table>
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
