@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useChartTheme } from '../contexts/ThemeContext'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { Users, Award, Target, DollarSign, ChevronRight, Phone, MessageCircle, Calendar, Flame, Snowflake, Clock, Zap, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react'
 
@@ -56,6 +57,7 @@ function getLeadTemp(lead, lastInteraction) {
 
 export default function DashboardPage() {
   const { profile, isAdmin, user } = useAuth()
+  const chartTheme = useChartTheme()
   const navigate = useNavigate()
   const [leads, setLeads] = useState([])
   const [interacciones, setInteracciones] = useState([])
@@ -341,21 +343,23 @@ export default function DashboardPage() {
               <div className="leads-per-day-chart">
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#EBEBF0" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} vertical={false} />
                     <XAxis
                       dataKey="chartLabel"
-                      tick={{ fontSize: 11, fill: '#8E8E93' }}
+                      tick={{ fontSize: 11, fill: chartTheme.axis }}
                       interval={daysRange <= 14 ? 0 : daysRange <= 30 ? 2 : 6}
                       angle={daysRange > 14 ? -45 : 0}
                       textAnchor={daysRange > 14 ? 'end' : 'middle'}
                       height={daysRange > 14 ? 50 : 30}
-                      axisLine={{ stroke: '#EBEBF0' }}
+                      axisLine={{ stroke: chartTheme.grid }}
                       tickLine={false}
                     />
-                    <YAxis tick={{ fontSize: 11, fill: '#8E8E93' }} allowDecimals={false} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: chartTheme.axis }} allowDecimals={false} axisLine={false} tickLine={false} />
                     <Tooltip
-                      cursor={{ fill: 'rgba(0,122,255,0.04)' }}
-                      contentStyle={{ background: '#fff', border: '1px solid #EBEBF0', borderRadius: '10px', fontSize: '0.8125rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                      cursor={{ fill: chartTheme.cursor }}
+                      contentStyle={{ background: chartTheme.tooltipBg, border: `1px solid ${chartTheme.tooltipBorder}`, color: chartTheme.tooltipText, borderRadius: '12px', fontSize: '0.8125rem', boxShadow: '0 8px 22px rgba(0,0,0,0.14)' }}
+                      itemStyle={{ color: chartTheme.tooltipText }}
+                      labelStyle={{ color: chartTheme.tooltipText }}
                       formatter={(value) => [`${value} lead${value !== 1 ? 's' : ''}`, 'Cantidad']}
                       labelFormatter={(label) => `${label}`}
                     />
@@ -537,7 +541,10 @@ export default function DashboardPage() {
                     label={({ name, value }) => `${name}: ${value}`}>
                     {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip
+                    contentStyle={{ background: chartTheme.tooltipBg, border: `1px solid ${chartTheme.tooltipBorder}`, color: chartTheme.tooltipText, borderRadius: '12px', fontSize: '0.8125rem' }}
+                    itemStyle={{ color: chartTheme.tooltipText }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             ) : <div className="empty-state"><p>Sin datos</p></div>}

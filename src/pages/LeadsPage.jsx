@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { Plus, Search, X, LayoutGrid, List, Download, Phone, MessageCircle, Trash2, Edit, CheckSquare } from 'lucide-react'
+import { Plus, Search, X, LayoutGrid, List, Download, Phone, MessageCircle, Trash2, Edit, AlertTriangle, GripVertical } from 'lucide-react'
+import { emitCrmEventSafe, CRM_EVENTS } from '../lib/integrations'
+import { downloadCSV, stamp, normalizePhone } from '../lib/exporters'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const ORIGEN_LABELS = { whatsapp: 'WhatsApp', facebook: 'Facebook', instagram: 'Instagram', presencial: 'Presencial', referido: 'Referido', otro: 'Otro' }
@@ -29,12 +31,32 @@ export default function LeadsPage() {
   const [editingLead, setEditingLead] = useState(null)
   const [formData, setFormData] = useState(EMPTY_LEAD)
   const [saving, setSaving] = useState(false)
+  const [orden, setOrden] = useState('recientes')
   // Bulk selection (admin only)
   const [selected, setSelected] = useState([])
   const [bulkAction, setBulkAction] = useState('')
+  // Arrastre en el kanban
+  const [dragId, setDragId] = useState(null)
+  const [dropTarget, setDropTarget] = useState(null)
+
+  const fetchLeads = useCallback(async () => {
+    try {
+      let q = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(id, full_name)').order('created_at', { ascending: false })
+      if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
+      const { data, error } = await q
+      if (error) throw error
+      setLeads(data || [])
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }, [isAdmin, profile?.id])
+
+  // Ref viva: el canal de realtime se suscribe una sola vez pero siempre
+  // ejecuta la última versión de fetchLeads (evita closures desactualizadas).
+  const fetchRef = useRef(fetchLeads)
+  useEffect(() => { fetchRef.current = fetchLeads }, [fetchLeads])
 
   useEffect(() => {
-    fetchLeads()
+    fetchRef.current()
     if (isAdmin) supabase.from('profiles').select('id, full_name').order('full_name').then(({ data }) => setVendedores(data || []))
     const h = () => openModal()
     window.addEventListener('open-new-lead', h)
@@ -42,7 +64,7 @@ export default function LeadsPage() {
     const channel = supabase
       .channel('leads-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
-        fetchLeads()
+        fetchRef.current()
       })
       .subscribe()
 
@@ -52,24 +74,59 @@ export default function LeadsPage() {
     }
   }, [])
 
-  async function fetchLeads() {
-    try {
-      let q = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(id, full_name)').order('created_at', { ascending: false })
-      if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
-      const { data, error } = await q
-      if (error) throw error
-      setLeads(data || [])
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
-  }
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    const res = leads.filter(l => {
+      if (term
+        && !l.nombre?.toLowerCase().includes(term)
+        && !l.telefono?.includes(search.trim())
+        && !l.email?.toLowerCase().includes(term)
+        && !l.modelo_interes?.toLowerCase().includes(term)) return false
+      if (filterEstado && l.estado !== filterEstado) return false
+      if (filterOrigen && l.origen !== filterOrigen) return false
+      if (filterVendedor === '__none__') { if (l.vendedor_asignado) return false }
+      else if (filterVendedor && l.vendedor_asignado !== filterVendedor) return false
+      return true
+    })
 
-  const filtered = useMemo(() => leads.filter(l => {
-    if (search && !l.nombre?.toLowerCase().includes(search.toLowerCase()) && !l.telefono?.includes(search) && !l.modelo_interes?.toLowerCase().includes(search.toLowerCase())) return false
-    if (filterEstado && l.estado !== filterEstado) return false
-    if (filterOrigen && l.origen !== filterOrigen) return false
-    if (filterVendedor && l.vendedor_asignado !== filterVendedor) return false
-    return true
-  }), [leads, search, filterEstado, filterOrigen, filterVendedor])
+    const porFecha = (a, b, campo, dir) => {
+      const va = a[campo] ? new Date(a[campo]).getTime() : 0
+      const vb = b[campo] ? new Date(b[campo]).getTime() : 0
+      return dir * (va - vb)
+    }
+
+    switch (orden) {
+      case 'antiguos': return [...res].sort((a, b) => porFecha(a, b, 'created_at', 1))
+      case 'presupuesto': return [...res].sort((a, b) => (Number(b.presupuesto_estimado) || 0) - (Number(a.presupuesto_estimado) || 0))
+      case 'nombre': return [...res].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'))
+      case 'cita': return [...res].sort((a, b) => {
+        if (!a.fecha_agenda && !b.fecha_agenda) return 0
+        if (!a.fecha_agenda) return 1
+        if (!b.fecha_agenda) return -1
+        return porFecha(a, b, 'fecha_agenda', 1)
+      })
+      default: return [...res].sort((a, b) => porFecha(a, b, 'created_at', -1))
+    }
+  }, [leads, search, filterEstado, filterOrigen, filterVendedor, orden])
+
+  // Detección de duplicados por teléfono (mismo número ya cargado)
+  const telefonosCargados = useMemo(() => {
+    const mapa = new Map()
+    leads.forEach(l => {
+      const num = normalizePhone(l.telefono)
+      if (!num) return
+      if (!mapa.has(num)) mapa.set(num, [])
+      mapa.get(num).push(l)
+    })
+    return mapa
+  }, [leads])
+
+  const duplicado = useMemo(() => {
+    const num = normalizePhone(formData.telefono)
+    if (!num) return null
+    const coincidencias = (telefonosCargados.get(num) || []).filter(l => l.id !== editingLead?.id)
+    return coincidencias.length > 0 ? coincidencias[0] : null
+  }, [formData.telefono, telefonosCargados, editingLead])
 
   function openModal(lead) {
     if (lead) {
@@ -115,18 +172,96 @@ export default function LeadsPage() {
 
         const { error } = await supabase.from('leads').update(payload).eq('id', editingLead.id)
         if (error) throw error
-        if (changes.length > 0) await supabase.from('historial_cambios').insert(changes)
+        if (changes.length > 0) {
+          // El historial es informativo: si RLS lo bloquea no debe tumbar el guardado.
+          const { error: histError } = await supabase.from('historial_cambios').insert(changes)
+          if (histError) console.warn('No se pudo registrar el historial:', histError.message)
+        }
         addToast('Lead actualizado', 'success')
+
+        const infoEvento = { ...payload, id: editingLead.id, estado_anterior: editingLead.estado, vendedor: vendedorNombre(payload.vendedor_asignado) }
+        emitCrmEventSafe(CRM_EVENTS.LEAD_UPDATED, infoEvento, { usuario: profile?.full_name })
+        if (editingLead.estado !== payload.estado) {
+          emitCrmEventSafe(CRM_EVENTS.LEAD_STATUS_CHANGED, infoEvento, { usuario: profile?.full_name })
+        }
+        if (editingLead.vendedor_asignado !== payload.vendedor_asignado && payload.vendedor_asignado) {
+          emitCrmEventSafe(CRM_EVENTS.LEAD_ASSIGNED, infoEvento, { usuario: profile?.full_name })
+        }
       } else {
+        // Insert idéntico al original (sin .select()) para no depender de las políticas RLS de lectura.
         const { error } = await supabase.from('leads').insert([payload])
         if (error) throw error
         addToast('Lead creado', 'success')
+        emitCrmEventSafe(
+          CRM_EVENTS.LEAD_CREATED,
+          { ...payload, vendedor: vendedorNombre(payload.vendedor_asignado) },
+          { usuario: profile?.full_name }
+        )
       }
       setIsModalOpen(false)
       setSelected([])
       fetchLeads()
     } catch (e) { addToast('Error al guardar', 'error'); console.error(e) }
     finally { setSaving(false) }
+  }
+
+  function vendedorNombre(id) {
+    if (!id) return ''
+    if (id === profile?.id) return profile?.full_name || ''
+    return vendedores.find(v => v.id === id)?.full_name || ''
+  }
+
+  /**
+   * Mueve un lead a otro estado (arrastrando en el kanban).
+   * Actualiza la UI de inmediato y revierte si la base rechaza el cambio.
+   */
+  async function moveLeadTo(leadId, nuevoEstado) {
+    const lead = leads.find(l => l.id === leadId)
+    if (!lead || lead.estado === nuevoEstado) return
+    if (!isAdmin && lead.vendedor_asignado !== profile?.id) {
+      addToast('No tenés permiso para mover este lead', 'error')
+      return
+    }
+
+    const estadoAnterior = lead.estado
+    setLeads(prev => prev.map(l => (l.id === leadId ? { ...l, estado: nuevoEstado } : l)))
+
+    try {
+      const { error } = await supabase.from('leads').update({ estado: nuevoEstado }).eq('id', leadId)
+      if (error) throw error
+      addToast(`${lead.nombre} → ${STATUS_LABELS[nuevoEstado]}`, 'success')
+      // El historial lo registra el trigger trg_audit_leads_changes (migración 002):
+      // no insertamos a mano para no duplicar filas en historial_cambios.
+
+      emitCrmEventSafe(
+        CRM_EVENTS.LEAD_STATUS_CHANGED,
+        { ...lead, estado: nuevoEstado, estado_anterior: estadoAnterior, vendedor: lead.vendedor?.full_name },
+        { usuario: profile?.full_name }
+      )
+    } catch (err) {
+      setLeads(prev => prev.map(l => (l.id === leadId ? { ...l, estado: estadoAnterior } : l)))
+      addToast('No se pudo mover el lead', 'error')
+      console.error(err)
+    }
+  }
+
+  function onDragStart(e, leadId) {
+    setDragId(leadId)
+    e.dataTransfer.effectAllowed = 'move'
+    try { e.dataTransfer.setData('text/plain', leadId) } catch { /* Safari viejo */ }
+  }
+
+  function onDragEnd() {
+    setDragId(null)
+    setDropTarget(null)
+  }
+
+  function onColumnDrop(e, estado) {
+    e.preventDefault()
+    const id = dragId || e.dataTransfer.getData('text/plain')
+    setDropTarget(null)
+    setDragId(null)
+    if (id) moveLeadTo(id, estado)
   }
 
   // Admin: Eliminar lead
@@ -178,12 +313,20 @@ export default function LeadsPage() {
   }
 
   function exportCSV() {
-    const rows = [['Nombre', 'Teléfono', 'Email', 'Modelo', 'Origen', 'Estado', 'Presupuesto', 'Vendedor', 'Cita', 'Creado']]
-    filtered.forEach(l => rows.push([l.nombre, l.telefono || '', l.email || '', l.modelo_interes || '', ORIGEN_LABELS[l.origen] || l.origen, STATUS_LABELS[l.estado], l.presupuesto_estimado || '', l.vendedor?.full_name || '', l.fecha_agenda || '', new Date(l.created_at).toLocaleDateString('es-AR')]))
-    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `leads_${new Date().toISOString().slice(0, 10)}.csv`; a.click()
-    addToast('CSV exportado', 'success')
+    if (filtered.length === 0) { addToast('No hay leads para exportar', 'error'); return }
+    downloadCSV(
+      ['Nombre', 'Teléfono', 'Email', 'Modelo', 'Origen', 'Estado', 'Presupuesto', 'Vendedor', 'Cita', 'Creado', 'Notas'],
+      filtered.map(l => [
+        l.nombre, l.telefono || '', l.email || '', l.modelo_interes || '',
+        ORIGEN_LABELS[l.origen] || l.origen || '', STATUS_LABELS[l.estado] || l.estado || '',
+        l.presupuesto_estimado || '', l.vendedor?.full_name || '',
+        l.fecha_agenda ? new Date(l.fecha_agenda).toLocaleString('es-AR') : '',
+        l.created_at ? new Date(l.created_at).toLocaleDateString('es-AR') : '',
+        l.notas || '',
+      ]),
+      `leads_motobox_${stamp()}.csv`
+    )
+    addToast(`${filtered.length} leads exportados`, 'success')
   }
 
   if (loading) return <div className="spinner-overlay"><div className="spinner" /></div>
@@ -207,9 +350,17 @@ export default function LeadsPage() {
         {isAdmin && (
           <select className="filter-select" value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)}>
             <option value="">Todos los vendedores</option>
+            <option value="__none__">Sin asignar</option>
             {vendedores.map(v => <option key={v.id} value={v.id}>{v.full_name}</option>)}
           </select>
         )}
+        <select className="filter-select" value={orden} onChange={e => setOrden(e.target.value)} title="Ordenar">
+          <option value="recientes">Más recientes</option>
+          <option value="antiguos">Más antiguos</option>
+          <option value="presupuesto">Mayor presupuesto</option>
+          <option value="cita">Próxima cita</option>
+          <option value="nombre">Nombre (A-Z)</option>
+        </select>
         <div className="view-toggle">
           <button className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`} onClick={() => setViewMode('table')}><List size={14} /> Tabla</button>
           <button className={`view-toggle-btn ${viewMode === 'kanban' ? 'active' : ''}`} onClick={() => setViewMode('kanban')}><LayoutGrid size={14} /> Kanban</button>
@@ -284,18 +435,36 @@ export default function LeadsPage() {
 
       {/* KANBAN VIEW */}
       {viewMode === 'kanban' && (
-        <div className="kanban-board">
+        <>
+          <div className="kanban-hint">
+            <GripVertical size={14} /> Arrastrá una tarjeta a otra columna para cambiarle el estado.
+          </div>
+          <div className="kanban-board">
           {STATUS_ORDER.map(status => {
             const items = filtered.filter(l => l.estado === status)
             return (
-              <div key={status} className="kanban-column" data-status={status}>
+              <div
+                key={status}
+                className={`kanban-column ${dropTarget === status ? 'drop-target' : ''}`}
+                data-status={status}
+                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dropTarget !== status) setDropTarget(status) }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDropTarget(prev => (prev === status ? null : prev)) }}
+                onDrop={e => onColumnDrop(e, status)}
+              >
                 <div className="kanban-column-header">
                   <span className="kanban-column-title">{STATUS_LABELS[status]}</span>
                   <span className="kanban-column-count">{items.length}</span>
                 </div>
                 <div className="kanban-cards">
                   {items.map(l => (
-                    <div key={l.id} className="kanban-card" onClick={() => navigate(`/leads/${l.id}`)}>
+                    <div
+                      key={l.id}
+                      className={`kanban-card ${dragId === l.id ? 'dragging' : ''}`}
+                      draggable
+                      onDragStart={e => onDragStart(e, l.id)}
+                      onDragEnd={onDragEnd}
+                      onClick={() => navigate(`/leads/${l.id}`)}
+                    >
                       <div className="kanban-card-name">{l.nombre}</div>
                       {l.modelo_interes && <div className="kanban-card-model">{l.modelo_interes}</div>}
                       {l.telefono && <div className="kanban-card-meta"><Phone size={11} /> {l.telefono}</div>}
@@ -306,12 +475,13 @@ export default function LeadsPage() {
                       </div>
                     </div>
                   ))}
-                  {items.length === 0 && <div className="empty-state"><p>Vacío</p></div>}
+                  {items.length === 0 && <div className="empty-state"><p>Soltá una tarjeta acá</p></div>}
                 </div>
               </div>
             )
           })}
-        </div>
+          </div>
+        </>
       )}
 
       {/* MODAL */}
@@ -324,6 +494,24 @@ export default function LeadsPage() {
             </div>
             <form onSubmit={handleSave}>
               <div className="modal-body">
+                {duplicado && (
+                  <div className="dup-warning">
+                    <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>
+                      Ya existe un lead con este teléfono: <strong>{duplicado.nombre}</strong>
+                      {duplicado.modelo_interes ? ` (${duplicado.modelo_interes})` : ''} — estado {STATUS_LABELS[duplicado.estado] || duplicado.estado}.
+                      {' '}
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '2px 8px', marginLeft: 4 }}
+                        onClick={() => { setIsModalOpen(false); navigate(`/leads/${duplicado.id}`) }}
+                      >
+                        Ver ficha
+                      </button>
+                    </span>
+                  </div>
+                )}
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Nombre *</label>

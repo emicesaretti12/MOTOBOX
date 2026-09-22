@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 import { Image as ImageIcon, Save, Eye, Upload, ExternalLink, Globe, Star, Plus, CheckCircle, Sparkles, RefreshCw } from 'lucide-react'
 import { uploadOptimizedImage } from '../lib/imageOptimizer'
+import { emitCrmEventSafe, CRM_EVENTS } from '../lib/integrations'
 
 function fmt$(v) { return v ? '$' + Number(v).toLocaleString('es-AR') : '-' }
 
@@ -120,6 +121,13 @@ export default function WebSettingsPage() {
       const { error } = await supabase.from('inventario_motos').update({ visible_web: next }).eq('id', moto.id)
       if (error) throw error
       addToast(next ? `🌐 ${moto.marca} ${moto.modelo} publicada en la web` : `🔒 Ocultada de la web`, 'success')
+      if (next) {
+        emitCrmEventSafe(CRM_EVENTS.MOTO_PUBLISHED, {
+          nombre: `${moto.marca} ${moto.modelo}`,
+          modelo_interes: `${moto.marca} ${moto.modelo}${moto.anio ? ` (${moto.anio})` : ''}`,
+          presupuesto_estimado: moto.precio,
+        })
+      }
       fetchWebMotos()
     } catch (e) {
       addToast('Error al actualizar visibilidad', 'error')

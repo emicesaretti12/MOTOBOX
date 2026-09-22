@@ -2,7 +2,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { Plus, Search, X, Edit, Trash2, DollarSign, TrendingUp, Award } from 'lucide-react'
+import { Plus, Search, X, Edit, Trash2, DollarSign, TrendingUp, Award, Download } from 'lucide-react'
+import { emitCrmEventSafe, CRM_EVENTS } from '../lib/integrations'
+import { downloadCSV, stamp } from '../lib/exporters'
 
 const EMPTY_SALE = { lead_id: '', moto_id: '', vendedor_id: '', precio_venta: '', metodo_pago: 'efectivo', fecha_venta: new Date().toISOString().slice(0, 16), notas: '' }
 const PAGO_LABELS = { efectivo: 'Efectivo', transferencia: 'Transferencia', tarjeta: 'Tarjeta', financiacion: 'Financiación', mixto: 'Mixto' }
@@ -80,14 +82,51 @@ export default function SalesPage() {
       } else {
         const { error } = await supabase.from('ventas').insert([payload])
         if (error) throw error
-        // Marcar moto como vendida
-        if (payload.moto_id) await supabase.from('inventario_motos').update({ estado: 'vendida' }).eq('id', payload.moto_id)
+        // Marcar la moto como vendida. El enum inventario_estado usa 'vendido'.
+        if (payload.moto_id) {
+          const { error: motoError } = await supabase
+            .from('inventario_motos')
+            .update({ estado: 'vendido' })
+            .eq('id', payload.moto_id)
+          if (motoError) {
+            console.warn('No se pudo marcar la moto como vendida:', motoError.message)
+            addToast('Venta registrada, pero la moto quedó sin marcar como vendida', 'error')
+          }
+        }
         addToast('Venta registrada', 'success')
+
+        const moto = motos.find(m => m.id === payload.moto_id)
+        const lead = leads.find(l => l.id === payload.lead_id)
+        emitCrmEventSafe(
+          CRM_EVENTS.SALE_CREATED,
+          {
+            nombre: lead?.nombre || '',
+            modelo_interes: moto ? `${moto.marca} ${moto.modelo}` : '',
+            precio_venta: payload.precio_venta,
+            vendedor: vendedores.find(v => v.id === payload.vendedor_id)?.full_name || profile?.full_name,
+          },
+          { usuario: profile?.full_name }
+        )
       }
       setIsModalOpen(false)
       fetchData()
     } catch (e) { addToast('Error al guardar', 'error'); console.error(e) }
     finally { setSaving(false) }
+  }
+
+  function exportarVentas() {
+    if (filtered.length === 0) { addToast('No hay ventas para exportar', 'error'); return }
+    downloadCSV(
+      ['Fecha', 'Cliente', 'Moto', 'Vendedor', 'Precio', 'Método de pago', 'Notas'],
+      filtered.map(v => [
+        v.fecha_venta ? new Date(v.fecha_venta).toLocaleString('es-AR') : '',
+        v.lead?.nombre || '', v.moto ? `${v.moto.marca} ${v.moto.modelo}` : '',
+        v.vendedor?.full_name || '', v.precio_venta || '',
+        PAGO_LABELS[v.metodo_pago] || v.metodo_pago || '', v.notas || '',
+      ]),
+      `ventas_motobox_${stamp()}.csv`
+    )
+    addToast(`${filtered.length} ventas exportadas`, 'success')
   }
 
   async function handleDelete(id) {
@@ -134,6 +173,9 @@ export default function SalesPage() {
           <input placeholder="Buscar cliente o moto..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         {isAdmin && <button className="btn btn-primary btn-sm" onClick={() => openModal()}><Plus size={14} /> Nueva Venta</button>}
+        <button className="btn btn-secondary btn-sm" onClick={exportarVentas} disabled={filtered.length === 0}>
+          <Download size={14} /> CSV
+        </button>
         <span className="results-count">{filtered.length} ventas</span>
       </div>
 

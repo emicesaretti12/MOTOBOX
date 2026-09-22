@@ -3,7 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, MoreHorizontal, Edit, Plus, X, Check, Trash2 } from 'lucide-react'
+import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, MoreHorizontal, Edit, Plus, X, Check, Trash2, CalendarPlus, Download } from 'lucide-react'
+import { emitCrmEventSafe, CRM_EVENTS, loadIntegrationConfig } from '../lib/integrations'
+import { renderTemplate, whatsappLink, googleCalendarLink, downloadICS } from '../lib/exporters'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const TIPO_LABELS = { llamada: 'Llamada', whatsapp: 'WhatsApp', email: 'Email', visita: 'Visita', otro: 'Otro' }
@@ -35,6 +37,17 @@ function getLeadTemp(lead, intCount) {
   return { label: '🔵 Frío', color: '#2563EB', bg: 'rgba(37,99,235,0.06)' }
 }
 
+/**
+ * Plantillas cargadas desde el Centro de Integraciones. Si el admin todavía no
+ * configuró ninguna se usan estas por defecto.
+ */
+function getConfiguredTemplates(lead, config, vendedor) {
+  const plantillas = config?.whatsapp?.plantillas
+  if (!Array.isArray(plantillas) || plantillas.length === 0) return getTemplates(lead)
+  const datos = { ...lead, nombre: lead.nombre?.split(' ')[0] || lead.nombre, vendedor }
+  return plantillas.map(p => ({ label: p.nombre, msg: renderTemplate(p.texto, datos) }))
+}
+
 function getTemplates(lead) {
   const name = lead.nombre?.split(' ')[0] || ''
   const model = lead.modelo_interes || 'la moto'
@@ -63,8 +76,18 @@ export default function LeadDetailPage() {
   const [intForm, setIntForm] = useState({ tipo: 'llamada', detalle: '' })
   const [saving, setSaving] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
+  const [integraciones, setIntegraciones] = useState(null)
 
   useEffect(() => { if (id) fetchAll() }, [id])
+
+  // Config de integraciones (plantillas de WhatsApp, duración de citas).
+  useEffect(() => {
+    let vivo = true
+    loadIntegrationConfig()
+      .then(({ config }) => { if (vivo) setIntegraciones(config) })
+      .catch(() => {})
+    return () => { vivo = false }
+  }, [])
 
   async function fetchAll() {
     try {
@@ -90,8 +113,14 @@ export default function LeadDetailPage() {
     try {
       const { error } = await supabase.from('leads').update({ estado: newStatus }).eq('id', id)
       if (error) throw error
-      await supabase.from('historial_cambios').insert({ lead_id: id, usuario_id: user.id, campo: 'Estado', valor_anterior: STATUS_LABELS[lead.estado], valor_nuevo: STATUS_LABELS[newStatus] })
+      const { error: histError } = await supabase.from('historial_cambios').insert({ lead_id: id, usuario_id: user.id, campo: 'Estado', valor_anterior: STATUS_LABELS[lead.estado], valor_nuevo: STATUS_LABELS[newStatus] })
+      if (histError) console.warn('No se pudo registrar el historial:', histError.message)
       addToast('Estado actualizado', 'success')
+      emitCrmEventSafe(
+        CRM_EVENTS.LEAD_STATUS_CHANGED,
+        { ...lead, estado: newStatus, estado_anterior: lead.estado, vendedor: lead.vendedor?.full_name },
+        { usuario: profile?.full_name }
+      )
       fetchAll()
     } catch (e) { addToast('Error', 'error') }
   }
@@ -116,9 +145,24 @@ export default function LeadDetailPage() {
       }
       const { error } = await supabase.from('leads').update(updates).eq('id', id)
       if (error) throw error
-      if (changes.length > 0) await supabase.from('historial_cambios').insert(changes)
+      if (changes.length > 0) {
+        const { error: histError } = await supabase.from('historial_cambios').insert(changes)
+        if (histError) console.warn('No se pudo registrar el historial:', histError.message)
+      }
       addToast('Lead actualizado', 'success')
       setShowEditModal(false)
+      emitCrmEventSafe(
+        CRM_EVENTS.LEAD_UPDATED,
+        { ...updates, id, estado_anterior: lead.estado, vendedor: lead.vendedor?.full_name },
+        { usuario: profile?.full_name }
+      )
+      if (lead.estado !== updates.estado) {
+        emitCrmEventSafe(
+          CRM_EVENTS.LEAD_STATUS_CHANGED,
+          { ...updates, id, estado_anterior: lead.estado, vendedor: lead.vendedor?.full_name },
+          { usuario: profile?.full_name }
+        )
+      }
       fetchAll()
     } catch (e) { addToast('Error al guardar', 'error') }
     finally { setSaving(false) }
@@ -132,6 +176,11 @@ export default function LeadDetailPage() {
       if (error) throw error
       if (lead.estado === 'nuevo') await supabase.from('leads').update({ estado: 'contactado' }).eq('id', id)
       addToast('Interacción registrada', 'success')
+      emitCrmEventSafe(
+        CRM_EVENTS.INTERACTION_CREATED,
+        { nombre: lead.nombre, telefono: lead.telefono, modelo_interes: lead.modelo_interes, tipo: intForm.tipo, detalle: intForm.detalle, lead_id: id },
+        { usuario: profile?.full_name }
+      )
       setShowIntModal(false)
       setIntForm({ tipo: 'llamada', detalle: '' })
       fetchAll()
@@ -183,6 +232,29 @@ export default function LeadDetailPage() {
         <a className="quick-action mail" href={lead.email ? `mailto:${lead.email}` : '#'} {...(!lead.email && { disabled: true })}><Mail size={16} /> Email</a>
         <button className="quick-action edit" onClick={openEdit}><Edit size={16} /> Editar</button>
         <button className="quick-action" onClick={() => setShowIntModal(true)}><Plus size={16} /> Interacción</button>
+        {lead.fecha_agenda && (
+          <>
+            <a
+              className="quick-action"
+              href={googleCalendarLink({ ...lead, vendedor: lead.vendedor?.full_name }, integraciones?.calendario?.duracionCitaMin || 45) || '#'}
+              target="_blank"
+              rel="noopener"
+              title="Abrir en Google Calendar"
+            >
+              <CalendarPlus size={16} /> Google Calendar
+            </a>
+            <button
+              className="quick-action"
+              onClick={() => {
+                downloadICS([{ ...lead, vendedor: lead.vendedor?.full_name }], integraciones?.calendario?.duracionCitaMin || 45, `cita_${(lead.nombre || 'lead').replace(/\s+/g, '_')}.ics`)
+                addToast('Cita descargada — abrila para agregarla a tu calendario', 'success')
+              }}
+              title="Descargar .ics para Outlook, Apple Calendar o el celular"
+            >
+              <Download size={16} /> Descargar cita
+            </button>
+          </>
+        )}
         {isAdmin && <button className="quick-action danger" onClick={async () => { if (window.confirm('¿Eliminar este lead?')) { await supabase.from('leads').delete().eq('id', id); addToast('Lead eliminado', 'success'); navigate('/leads') } }}><Trash2 size={16} /> Eliminar</button>}
       </div>
 
@@ -190,10 +262,16 @@ export default function LeadDetailPage() {
       {showTemplates && lead.telefono && (
         <div className="wa-templates">
           <div className="wa-templates-title">💬 Enviar mensaje personalizado</div>
-          {getTemplates(lead).map((t, i) => (
-            <a key={i} className="wa-template" href={getWaMsg(lead.telefono, t.msg)} target="_blank" rel="noopener">
+          {getConfiguredTemplates(lead, integraciones, profile?.full_name).map((t, i) => (
+            <a
+              key={i}
+              className="wa-template"
+              href={whatsappLink(lead.telefono, t.msg, integraciones?.whatsapp?.prefijoPais || '54') || '#'}
+              target="_blank"
+              rel="noopener"
+            >
               <span className="wa-template-label">{t.label}</span>
-              <span className="wa-template-preview">{t.msg.substring(0, 60)}...</span>
+              <span className="wa-template-preview">{t.msg.length > 60 ? t.msg.substring(0, 60) + '...' : t.msg}</span>
             </a>
           ))}
           <a className="wa-template" href={getWa(lead.telefono)} target="_blank" rel="noopener">

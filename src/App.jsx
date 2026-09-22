@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ToastProvider } from './contexts/ToastContext'
+import { ThemeProvider } from './contexts/ThemeContext'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import LeadsPage from './pages/LeadsPage'
@@ -13,6 +14,7 @@ import InventoryPage from './pages/InventoryPage'
 import SalesPage from './pages/SalesPage'
 import ClientsPage from './pages/ClientsPage'
 import WebSettingsPage from './pages/WebSettingsPage'
+import IntegrationsPage from './pages/IntegrationsPage'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -106,6 +108,14 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="integraciones"
+          element={
+            <ProtectedRoute adminOnly>
+              <IntegrationsPage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -115,11 +125,13 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <AppRoutes />
-        </ToastProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <AppRoutes />
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }
