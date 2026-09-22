@@ -30,6 +30,7 @@ npm install
 3. Desplegá las Edge Functions:
    - `supabase/functions/create-user/index.ts`
    - `supabase/functions/reset-password/index.ts`
+   - `supabase/functions/sendpulse-lead-webhook/index.ts` (opcional, ver sección de Integraciones)
 
 ### 3. Variables de entorno
 
@@ -103,6 +104,32 @@ src/
 |-----------|-----------------------------------------------------|
 | Admin     | Dashboard completo, todos los leads, gestión de usuarios |
 | Empleado  | Dashboard propio, solo sus leads asignados            |
+
+## 🤖 Integraciones
+
+### Leads de Instagram vía SendPulse
+
+`supabase/functions/sendpulse-lead-webhook` recibe leads capturados por un bot de SendPulse (campañas de Instagram/Facebook) y los guarda en la tabla `leads` con `origen = 'instagram'`, evitando duplicados por teléfono/email.
+
+1. Deployá la función y configurá el secret:
+   ```bash
+   supabase functions deploy sendpulse-lead-webhook
+   supabase secrets set SENDPULSE_WEBHOOK_SECRET=un-secreto-largo-y-random
+   ```
+2. En SendPulse, al final del flujo de captura, agregá una acción **"Send HTTP request"**:
+   - Método: `POST`
+   - URL: `https://<tu-proyecto>.supabase.co/functions/v1/sendpulse-lead-webhook`
+   - Header: `x-webhook-secret: <el-mismo-secreto>`
+   - Body (JSON), mapeando las variables del flujo:
+     ```json
+     {
+       "nombre": "{{contact_name}}",
+       "telefono": "{{contact_phone}}",
+       "modelo_interes": "{{modelo}}",
+       "campana": "{{ad_title}}"
+     }
+     ```
+3. Cada request crea un lead nuevo, o si ya existe uno con el mismo teléfono/email, le agrega una nota con la fecha y la campaña en vez de duplicarlo.
 
 ## 🛠️ Stack
 
