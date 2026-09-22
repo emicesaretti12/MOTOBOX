@@ -10,10 +10,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'x-webhook-secret, content-type',
 }
 
+// SendPulse exige un valor por defecto en sus variables (no admite vacío) y no
+// siempre resuelve {{variable}} si el bot nunca llegó a completarla, así que
+// tratamos esos casos como "sin dato".
+function esValorInvalido(texto: string): boolean {
+  return texto === '' || texto === '-' || texto.startsWith('{{')
+}
+
 function pick(body: Record<string, unknown>, keys: string[]): string | undefined {
   for (const key of keys) {
     const value = body[key]
-    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (typeof value === 'string') {
+      const texto = value.trim()
+      if (!esValorInvalido(texto)) return texto
+    }
   }
   return undefined
 }
@@ -36,7 +46,7 @@ function extraerDeRespuestaIA(raw: string | undefined) {
     const parsed = JSON.parse(match[0])
     const datos: Record<string, string> = {}
     for (const campo of ['nombre', 'telefono', 'email', 'modelo_interes']) {
-      if (typeof parsed[campo] === 'string' && parsed[campo].trim()) datos[campo] = parsed[campo].trim()
+      if (typeof parsed[campo] === 'string' && !esValorInvalido(parsed[campo].trim())) datos[campo] = parsed[campo].trim()
     }
     return { datos, notaLimpia }
   } catch {
