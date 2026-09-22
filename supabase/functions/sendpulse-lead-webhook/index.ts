@@ -18,6 +18,32 @@ function pick(body: Record<string, unknown>, keys: string[]): string | undefined
   return undefined
 }
 
+// El Agente de IA de SendPulse no separa los datos en variables, así que le
+// pedimos que termine su respuesta con ###LEAD_JSON### {...} y lo parseamos acá.
+const LEAD_JSON_MARKER = '###LEAD_JSON###'
+
+function extraerDeRespuestaIA(raw: string | undefined) {
+  if (!raw) return { datos: {} as Record<string, string>, notaLimpia: undefined as string | undefined }
+
+  const idx = raw.indexOf(LEAD_JSON_MARKER)
+  if (idx === -1) return { datos: {}, notaLimpia: raw.trim() || undefined }
+
+  const notaLimpia = raw.slice(0, idx).trim() || undefined
+  const match = raw.slice(idx + LEAD_JSON_MARKER.length).match(/\{[\s\S]*?\}/)
+  if (!match) return { datos: {}, notaLimpia }
+
+  try {
+    const parsed = JSON.parse(match[0])
+    const datos: Record<string, string> = {}
+    for (const campo of ['nombre', 'telefono', 'email', 'modelo_interes']) {
+      if (typeof parsed[campo] === 'string' && parsed[campo].trim()) datos[campo] = parsed[campo].trim()
+    }
+    return { datos, notaLimpia }
+  } catch {
+    return { datos: {}, notaLimpia }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -43,12 +69,15 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}))
 
-    const nombre = pick(body, ['nombre', 'name', 'full_name'])
-    const telefono = pick(body, ['telefono', 'phone', 'whatsapp', 'phone_number'])
-    const email = pick(body, ['email', 'mail'])
-    const modeloInteres = pick(body, ['modelo_interes', 'producto', 'interest', 'model'])
+    const rawResponse = pick(body, ['raw_response', 'last_ai_response'])
+    const { datos: datosIA, notaLimpia } = extraerDeRespuestaIA(rawResponse)
+
+    const nombre = pick(body, ['nombre', 'name', 'full_name']) ?? datosIA.nombre
+    const telefono = pick(body, ['telefono', 'phone', 'whatsapp', 'phone_number']) ?? datosIA.telefono
+    const email = pick(body, ['email', 'mail']) ?? datosIA.email
+    const modeloInteres = pick(body, ['modelo_interes', 'producto', 'interest', 'model']) ?? datosIA.modelo_interes
     const campana = pick(body, ['campana', 'campaign', 'campaign_name', 'ad_name'])
-    const notas = pick(body, ['notas', 'message', 'comentario'])
+    const notas = pick(body, ['notas', 'message', 'comentario']) ?? notaLimpia
 
     if (!nombre || (!telefono && !email)) {
       return new Response(
