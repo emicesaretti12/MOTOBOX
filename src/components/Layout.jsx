@@ -1,6 +1,8 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useState } from 'react'
+import CommandPalette from './CommandPalette'
+import ThemeToggle from './ThemeToggle'
 import {
   LayoutDashboard,
   Users as UsersIcon,
@@ -15,12 +17,15 @@ import {
   Package,
   DollarSign,
   Briefcase,
+  Plug,
+  Search,
 } from 'lucide-react'
 
 export default function Layout() {
   const { profile, logout, isAdmin } = useAuth()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '')
 
   function getPageTitle() {
     const path = location.pathname
@@ -35,6 +40,7 @@ export default function Layout() {
     if (path === '/ventas') return 'Gestión de Ventas'
     if (path === '/clientes') return 'Gestión de Clientes'
     if (path === '/web-config') return 'Configurar Web Pública'
+    if (path === '/integraciones') return 'Integraciones y Conexiones'
     return 'MotoBox CRM'
   }
 
@@ -169,6 +175,15 @@ export default function Layout() {
                 <Settings size={18} />
                 Configurar Web
               </NavLink>
+
+              <NavLink
+                to="/integraciones"
+                className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <Plug size={18} />
+                Integraciones
+              </NavLink>
             </>
           )}
 
@@ -209,13 +224,28 @@ export default function Layout() {
             </button>
             {getPageTitle()}
           </div>
-          <div className="topbar-actions">{getPageActions()}</div>
+          <div className="topbar-actions">
+            <button
+              type="button"
+              className="cmdk-trigger"
+              onClick={() => window.dispatchEvent(new CustomEvent('open-command-palette'))}
+              title="Buscador global"
+            >
+              <Search size={15} />
+              <span>Buscar...</span>
+              <kbd className="cmdk-kbd">{isMac ? '⌘' : 'Ctrl'} K</kbd>
+            </button>
+            <ThemeToggle />
+            {getPageActions()}
+          </div>
         </header>
 
         <div className="page-content">
           <Outlet />
         </div>
       </main>
+
+      <CommandPalette />
     </div>
   )
 }

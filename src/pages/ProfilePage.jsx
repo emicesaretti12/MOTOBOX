@@ -2,11 +2,12 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { useToast } from '../contexts/ToastContext'
 import {
   Phone, MessageCircle, Mail, MapPin, Target, Award, TrendingUp, Calendar,
   Users, Clock, Plus, ChevronRight, Flame, Zap, AlertTriangle,
-  BarChart3, UserCheck, Eye, ArrowUpRight, CheckCircle
+  BarChart3, UserCheck, Eye, ArrowUpRight, CheckCircle, Sun, Moon, Monitor, Rows3, Rows4
 } from 'lucide-react'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
@@ -26,6 +27,7 @@ function getWaLink(ph) { if (!ph) return null; const c = ph.replace(/\D/g, ''); 
 export default function ProfilePage() {
   const navigate = useNavigate()
   const { user, profile, isAdmin } = useAuth()
+  const { mode, setMode, density, setDensity } = useTheme()
   const { addToast } = useToast()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -512,6 +514,44 @@ export default function ProfilePage() {
                 </div>
                 <button type="submit" className="btn btn-primary btn-full" disabled={saving}>{saving ? 'Guardando...' : 'Actualizar Contraseña'}</button>
               </form>
+            </div>
+          </div>
+
+          {/* Apariencia — se guarda en este navegador, no toca la base */}
+          <div className="card">
+            <div className="card-header"><h3>Apariencia</h3></div>
+            <div className="card-body">
+              <div className="form-group">
+                <label className="form-label">Tema</label>
+                <div className="segmented-filters">
+                  <button type="button" className={`segmented-filter-btn ${mode === 'light' ? 'active' : ''}`} onClick={() => setMode('light')}>
+                    <Sun size={14} /> Claro
+                  </button>
+                  <button type="button" className={`segmented-filter-btn ${mode === 'dark' ? 'active' : ''}`} onClick={() => setMode('dark')}>
+                    <Moon size={14} /> Oscuro
+                  </button>
+                  <button type="button" className={`segmented-filter-btn ${mode === 'auto' ? 'active' : ''}`} onClick={() => setMode('auto')}>
+                    <Monitor size={14} /> Automático
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Densidad de la interfaz</label>
+                <div className="segmented-filters">
+                  <button type="button" className={`segmented-filter-btn ${density === 'comfortable' ? 'active' : ''}`} onClick={() => setDensity('comfortable')}>
+                    <Rows3 size={14} /> Cómoda
+                  </button>
+                  <button type="button" className={`segmented-filter-btn ${density === 'compact' ? 'active' : ''}`} onClick={() => setDensity('compact')}>
+                    <Rows4 size={14} /> Compacta
+                  </button>
+                </div>
+                <div className="form-hint">La densidad compacta muestra más filas por pantalla, ideal para monitores chicos.</div>
+              </div>
+
+              <div className="form-hint" style={{ marginTop: 4 }}>
+                Estas preferencias se guardan sólo en este dispositivo.
+              </div>
             </div>
           </div>
         </div>

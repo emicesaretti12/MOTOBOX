@@ -350,7 +350,7 @@ export default function InventoryPage() {
             <div className="card-body">
               <div className="empty-state" style={{ padding: '36px 16px' }}>
                 <Globe size={44} style={{ color: '#2563EB', marginBottom: 12 }} />
-                <h4 style={{ margin: '0 0 6px', color: '#18181B', fontSize: '1.125rem' }}>
+                <h4 style={{ margin: '0 0 6px', color: 'var(--gray-900)', fontSize: '1.125rem' }}>
                   {filterWeb === 'web' ? 'No tenés motos publicadas en la web aún' : 'No se encontraron motos con esos filtros'}
                 </h4>
                 <p style={{ color: '#71717A', fontSize: '0.875rem', marginBottom: 18, maxWidth: 460, margin: '0 auto 18px' }}>
@@ -618,7 +618,7 @@ export default function InventoryPage() {
                 </div>
 
                 {/* 2. DATOS GENERALES */}
-                <div style={{ fontSize: '0.875rem', fontWeight: 800, color: '#18181B', marginBottom: 10 }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--gray-900)', marginBottom: 10 }}>
                   🏍️ Datos del Vehículo
                 </div>
                 <div className="form-row">
@@ -644,7 +644,7 @@ export default function InventoryPage() {
                     <Globe size={18} /> Publicación en Catálogo Web Oficial
                   </div>
 
-                  <div style={{ display: 'flex', gap: 24, padding: '12px 16px', background: '#fff', borderRadius: 6, border: '1px solid var(--gray-200)', marginBottom: 14 }}>
+                  <div style={{ display: 'flex', gap: 24, padding: '12px 16px', background: 'var(--neu-surface, #fff)', borderRadius: 6, border: '1px solid var(--gray-200)', marginBottom: 14 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.875rem', fontWeight: 700, cursor: 'pointer', color: formData.visible_web ? '#16A34A' : 'var(--gray-600)' }}>
                       <input type="checkbox" checked={formData.visible_web} onChange={e => setFormData(p => ({ ...p, visible_web: e.target.checked }))} style={{ width: 18, height: 18, accentColor: '#16A34A' }} />
                       🌐 Mostrar en la Web Pública

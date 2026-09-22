@@ -2,7 +2,10 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { Calendar, Clock, ChevronLeft, ChevronRight, Phone, MessageCircle, Plus, MapPin } from 'lucide-react'
+import { Calendar, Clock, ChevronLeft, ChevronRight, Phone, MessageCircle, Plus, MapPin, Download, CalendarPlus } from 'lucide-react'
+import { useToast } from '../contexts/ToastContext'
+import { loadIntegrationConfig } from '../lib/integrations'
+import { downloadICS, googleCalendarLink } from '../lib/exporters'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const DAY_NAMES_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -38,12 +41,46 @@ export default function AgendaPage() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [filterVendedor, setFilterVendedor] = useState('')
   const [viewMode, setViewMode] = useState('semana') // semana | dia
+  const [duracionCita, setDuracionCita] = useState(45)
+  const { addToast } = useToast()
 
   const today = new Date()
   const monday = useMemo(() => getMonday(weekOffset), [weekOffset])
   const weekDays = useMemo(() => getDaysInRange(monday, 7), [monday])
 
   useEffect(() => { fetchData() }, [])
+
+  useEffect(() => {
+    let vivo = true
+    loadIntegrationConfig()
+      .then(({ config }) => { if (vivo) setDuracionCita(config?.calendario?.duracionCitaMin || 45) })
+      .catch(() => {})
+    return () => { vivo = false }
+  }, [])
+
+  function exportarSemana() {
+    const deLaSemana = filteredLeads.filter(l => {
+      const d = new Date(l.fecha_agenda)
+      return d >= weekDays[0] && d <= new Date(weekDays[6].getTime() + 86400000)
+    })
+    if (deLaSemana.length === 0) { addToast('No hay citas en esta semana', 'error'); return }
+    downloadICS(
+      deLaSemana.map(l => ({ ...l, vendedor: l.vendedor?.full_name })),
+      duracionCita,
+      `agenda_semana_${weekDays[0].toISOString().slice(0, 10)}.ics`
+    )
+    addToast(`${deLaSemana.length} citas descargadas — abrí el archivo en tu calendario`, 'success')
+  }
+
+  function exportarTodo() {
+    if (leads.length === 0) { addToast('No hay citas agendadas', 'error'); return }
+    downloadICS(
+      leads.map(l => ({ ...l, vendedor: l.vendedor?.full_name })),
+      duracionCita,
+      `agenda_completa_motobox.ics`
+    )
+    addToast(`${leads.length} citas descargadas`, 'success')
+  }
 
   async function fetchData() {
     try {
@@ -106,13 +143,19 @@ export default function AgendaPage() {
         <button className="btn btn-secondary btn-sm" onClick={() => setWeekOffset(w => w - 1)}><ChevronLeft size={16} /></button>
         <button className="btn btn-primary btn-sm" onClick={() => setWeekOffset(0)}>Hoy</button>
         <button className="btn btn-secondary btn-sm" onClick={() => setWeekOffset(w => w + 1)}><ChevronRight size={16} /></button>
-        <span className="results-count" style={{ fontWeight: 700, color: '#18181B', textTransform: 'capitalize' }}>{fmtWeekRange()}</span>
+        <span className="results-count" style={{ fontWeight: 700, color: 'var(--gray-900)', textTransform: 'capitalize' }}>{fmtWeekRange()}</span>
         {isAdmin && (
           <select className="filter-select" value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)}>
             <option value="">Todos los vendedores</option>
             {vendedores.map(v => <option key={v.id} value={v.id}>{v.full_name}</option>)}
           </select>
         )}
+        <button className="btn btn-secondary btn-sm" onClick={exportarSemana} title="Descargar las citas de esta semana (.ics)">
+          <Download size={14} /> Semana .ics
+        </button>
+        <button className="btn btn-secondary btn-sm" onClick={exportarTodo} title="Descargar todas las citas (.ics)">
+          <Calendar size={14} /> Toda la agenda
+        </button>
       </div>
 
       {/* Mini Calendar Strip */}
@@ -163,6 +206,15 @@ export default function AgendaPage() {
                       <div className="agenda-event-actions" onClick={e => e.stopPropagation()}>
                         {l.telefono && getWa(l.telefono) && <a href={getWa(l.telefono)} target="_blank" rel="noopener" className="btn-icon whatsapp"><MessageCircle size={15} /></a>}
                         {l.telefono && <a href={`tel:${l.telefono}`} className="btn-icon phone"><Phone size={15} /></a>}
+                        <a
+                          href={googleCalendarLink({ ...l, vendedor: l.vendedor?.full_name }, duracionCita) || '#'}
+                          target="_blank"
+                          rel="noopener"
+                          className="btn-icon"
+                          title="Agregar a Google Calendar"
+                        >
+                          <CalendarPlus size={15} />
+                        </a>
                       </div>
                       <span className={`badge badge-${l.estado}`} style={{ fontSize: '0.625rem' }}>{STATUS_LABELS[l.estado]}</span>
                     </div>
