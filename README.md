@@ -116,20 +116,24 @@ src/
    supabase functions deploy sendpulse-lead-webhook
    supabase secrets set SENDPULSE_WEBHOOK_SECRET=un-secreto-largo-y-random
    ```
-2. En SendPulse, al final del flujo de captura, agregá una acción **"Send HTTP request"**:
+2. En SendPulse, creá las variables de **contacto** `lead_nombre`, `lead_telefono` y `lead_modelo` (tipo Cadena) desde la pestaña **Suscriptores → Crear variable** del bot. No uses "Variables de bot" (las que empiezan con `$`): esas son globales y se comparten entre todos los suscriptores.
+3. En el nodo **Agente de IA** (Salida Condicional), en "Guardar datos de la respuesta del usuario", asigná nombre, teléfono y modelo a esas tres variables.
+4. Encadená después de la salida del agente un nodo **Solicitud API**:
    - Método: `POST`
    - URL: `https://<tu-proyecto>.supabase.co/functions/v1/sendpulse-lead-webhook`
-   - Header: `x-webhook-secret: <el-mismo-secreto>`
-   - Body (JSON), mapeando las variables del flujo:
+   - Headers: `x-webhook-secret: <el-mismo-secreto>` y `Content-Type: application/json`
+   - Cuerpo (JSON):
      ```json
      {
-       "nombre": "{{contact_name}}",
-       "telefono": "{{contact_phone}}",
-       "modelo_interes": "{{modelo}}",
-       "campana": "{{ad_title}}"
+       "nombre": "{{lead_nombre}}",
+       "full_name": "{{full_name}}",
+       "telefono": "{{lead_telefono}}",
+       "modelo_interes": "{{lead_modelo}}",
+       "campana": "Instagram Bot SendPulse"
      }
      ```
-3. Cada request crea un lead nuevo, o si ya existe uno con el mismo teléfono/email, le agrega una nota con la fecha y la campaña en vez de duplicarlo.
+     `full_name` (nombre del perfil de Instagram) se usa solo si `lead_nombre` llega vacío.
+5. Cada request crea un lead nuevo, o si ya existe uno con el mismo teléfono/email, le agrega una nota con la fecha y la campaña en vez de duplicarlo. Si falta nombre o no hay teléfono ni email, responde 400 y no guarda nada.
 
 ## 🛠️ Stack
 
