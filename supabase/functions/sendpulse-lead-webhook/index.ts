@@ -77,7 +77,19 @@ Deno.serve(async (req) => {
       )
     }
 
-    const body = await req.json().catch(() => ({}))
+    const rawText = await req.text()
+    console.log('Body recibido de SendPulse:', rawText)
+
+    let body: Record<string, unknown> = {}
+    try {
+      body = JSON.parse(rawText)
+    } catch (err) {
+      console.error('No se pudo parsear el body como JSON:', err)
+      return new Response(
+        JSON.stringify({ error: 'Body inválido: no es JSON válido', recibido: rawText }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     const rawResponse = pick(body, ['raw_response', 'last_ai_response'])
     const { datos: datosIA, notaLimpia } = extraerDeRespuestaIA(rawResponse)
@@ -88,6 +100,8 @@ Deno.serve(async (req) => {
     const modeloInteres = pick(body, ['modelo_interes', 'producto', 'interest', 'model']) ?? datosIA.modelo_interes
     const campana = pick(body, ['campana', 'campaign', 'campaign_name', 'ad_name'])
     const notas = pick(body, ['notas', 'message', 'comentario']) ?? notaLimpia
+
+    console.log('Datos interpretados:', { nombre, telefono, email, modeloInteres, campana })
 
     if (!nombre || (!telefono && !email)) {
       return new Response(
