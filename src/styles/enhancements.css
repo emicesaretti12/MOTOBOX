@@ -467,3 +467,35 @@
   .int-savebar { flex-direction: column; align-items: stretch; }
   .int-savebar .btn { width: 100%; }
 }
+
+/* === MODALES EN ESCRITORIO =============================================== */
+/* Antes el modal entero hacía scroll y el pie con "Guardar" quedaba fuera de
+   la pantalla en notebooks (ej. 1366x768). Ahora la cabecera y el pie quedan
+   fijos y sólo se desplaza el cuerpo. Sólo en escritorio: en el celular el
+   comportamiento no cambia. */
+@media (min-width: 769px) {
+  .modal {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 40px);
+    max-height: calc(100dvh - 40px);
+  }
+
+  .modal > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .modal-header,
+  .modal-footer {
+    flex-shrink: 0;
+  }
+
+  .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
