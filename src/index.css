@@ -3253,3 +3253,39 @@ body {
 }
 
 
+
+
+/* === SORTEO (solo admin) === */
+.badge-sorteo-gratis { background: var(--info-light); color: var(--info); }
+.badge-sorteo-pendiente { background: var(--gray-100); color: var(--gray-500); }
+.badge-sorteo-comprobante { background: var(--warning-light); color: var(--warning); }
+.badge-sorteo-verificado { background: var(--success-light); color: var(--success); }
+.badge-sorteo-rechazado { background: rgba(224, 46, 36, 0.08); color: #c4241b; }
+.table-scroll { overflow-x: auto; }
+.sorteo-num { font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+.sorteo-tel { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.sorteo-ok { color: var(--success); }
+.sorteo-ok-text { color: var(--success); font-weight: 600; }
+.sorteo-warn-text { color: var(--warning); font-weight: 600; }
+.sorteo-manual-card { margin-bottom: 20px; }
+.sorteo-manual-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.sorteo-manual-info { display: flex; align-items: center; gap: 12px; color: var(--gray-700); }
+.sorteo-manual-info div { display: flex; flex-direction: column; gap: 2px; }
+.sorteo-manual-info span { font-size: 0.8125rem; color: var(--gray-500); }
+.sorteo-manual-actions { display: flex; gap: 8px; }
+.sorteo-modal { max-width: 620px; }
+.sorteo-status-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.sorteo-data { display: grid; gap: 8px; margin: 0 0 18px; }
+.sorteo-data div { display: grid; grid-template-columns: 130px 1fr; gap: 10px; font-size: 0.875rem; }
+.sorteo-data dt { color: var(--gray-500); }
+.sorteo-data dd { margin: 0; color: var(--gray-900); overflow-wrap: anywhere; }
+.sorteo-code { font-size: 1rem; letter-spacing: 0.18em; font-variant-numeric: tabular-nums; }
+.sorteo-comprobante { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 14px; border-radius: var(--radius-md); background: var(--gray-100); margin-bottom: 16px; }
+.sorteo-comprobante-img { max-width: 100%; max-height: 360px; border-radius: var(--radius-md); border: 1px solid var(--gray-200); }
+.sorteo-footer { flex-wrap: wrap; }
+.btn-whatsapp { background: #16a34a; color: #ffffff; border: none; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.btn-whatsapp:hover { background: #15803d; color: #ffffff; }
+@media (max-width: 640px) {
+  .sorteo-data div { grid-template-columns: 1fr; gap: 2px; }
+  .sorteo-footer .btn { flex: 1 1 100%; justify-content: center; }
+}

@@ -13,6 +13,7 @@ import InventoryPage from './pages/InventoryPage'
 import SalesPage from './pages/SalesPage'
 import ClientsPage from './pages/ClientsPage'
 import WebSettingsPage from './pages/WebSettingsPage'
+import SorteoPage from './pages/SorteoPage'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -95,6 +96,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute adminOnly>
               <UsersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="sorteo"
+          element={
+            <ProtectedRoute adminOnly>
+              <SorteoPage />
             </ProtectedRoute>
           }
         />

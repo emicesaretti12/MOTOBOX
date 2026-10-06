@@ -10,6 +10,7 @@ import {
   X,
   Plus,
   Settings,
+  Ticket,
   Calendar,
   Activity,
   Package,
@@ -35,6 +36,7 @@ export default function Layout() {
     if (path === '/ventas') return 'Gestión de Ventas'
     if (path === '/clientes') return 'Gestión de Clientes'
     if (path === '/web-config') return 'Configurar Web Pública'
+    if (path === '/sorteo') return 'Sorteo'
     return 'MotoBox CRM'
   }
 
@@ -159,6 +161,15 @@ export default function Layout() {
               >
                 <UserPlus size={18} />
                 Usuarios
+              </NavLink>
+
+              <NavLink
+                to="/sorteo"
+                className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <Ticket size={18} />
+                Sorteo
               </NavLink>
 
               <NavLink
