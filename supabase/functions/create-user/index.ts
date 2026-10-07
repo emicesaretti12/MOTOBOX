@@ -64,6 +64,21 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Solo estos dos roles existen; cualquier otro valor se rechaza.
+    const rol = role === 'admin' ? 'admin' : 'empleado'
+    if (role && role !== 'admin' && role !== 'empleado') {
+      return new Response(
+        JSON.stringify({ error: 'Rol inválido' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    if (!/^\d{7,8}$/.test(String(dni))) {
+      return new Response(
+        JSON.stringify({ error: 'El DNI tiene que tener 7 u 8 números' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     if (password.length < 6) {
       return new Response(
         JSON.stringify({ error: 'La contraseña debe tener al menos 6 caracteres' }),
@@ -99,11 +114,9 @@ Deno.serve(async (req) => {
       email,
       password,
       email_confirm: true,
-      user_metadata: {
-        dni,
-        full_name,
-        role: role || 'empleado',
-      },
+      user_metadata: { dni, full_name },
+      // app_metadata solo lo puede escribir el servidor: de acá sale el rol (ver migración 006).
+      app_metadata: { role: rol },
     })
 
     if (createError) {
@@ -111,6 +124,18 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: createError.message }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // El perfil se escribe con la clave de servicio: el rol nunca depende de datos que mande el usuario.
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .upsert({ id: newUser.user.id, dni, full_name, role: rol })
+    if (profileError) {
+      console.error('Error setting profile:', profileError)
+      return new Response(
+        JSON.stringify({ error: 'El usuario se creó pero no se pudo guardar su perfil' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
