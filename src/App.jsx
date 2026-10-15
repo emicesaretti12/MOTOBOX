@@ -14,7 +14,9 @@ import SalesPage from './pages/SalesPage'
 import ClientsPage from './pages/ClientsPage'
 import WebSettingsPage from './pages/WebSettingsPage'
 import SorteoPage from './pages/SorteoPage'
+import VerificacionPage from './pages/VerificacionPage'
 import Layout from './components/Layout'
+import { puedeVerificar } from './lib/verificacion'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, profile, loading } = useAuth()
@@ -35,6 +37,13 @@ function ProtectedRoute({ children, adminOnly = false }) {
     return <Navigate to="/" replace />
   }
 
+  return children
+}
+
+// Cola de verificación de DNI: admin o usuarios con verifica_dni.
+function VerificadorRoute({ children }) {
+  const { profile } = useAuth()
+  if (!puedeVerificar(profile)) return <Navigate to="/" replace />
   return children
 }
 
@@ -83,6 +92,14 @@ function AppRoutes() {
         <Route path="inventario" element={<InventoryPage />} />
         <Route path="ventas" element={<SalesPage />} />
         <Route path="clientes" element={<ClientsPage />} />
+        <Route
+          path="verificacion"
+          element={
+            <VerificadorRoute>
+              <VerificacionPage />
+            </VerificadorRoute>
+          }
+        />
         <Route
           path="monitor"
           element={

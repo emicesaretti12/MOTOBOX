@@ -1,6 +1,8 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useState } from 'react'
+import { useCrmConfig } from '../hooks/useCrmConfig'
+import { puedeVerificar } from '../lib/verificacion'
 import {
   LayoutDashboard,
   Users as UsersIcon,
@@ -16,12 +18,15 @@ import {
   Package,
   DollarSign,
   Briefcase,
+  ShieldCheck,
 } from 'lucide-react'
 
 export default function Layout() {
   const { profile, logout, isAdmin } = useAuth()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const crmConfig = useCrmConfig()
+  const verVerificacion = !!crmConfig?.colaDniActiva && puedeVerificar(profile)
 
   function getPageTitle() {
     const path = location.pathname
@@ -37,6 +42,7 @@ export default function Layout() {
     if (path === '/clientes') return 'Gestión de Clientes'
     if (path === '/web-config') return 'Configurar Web Pública'
     if (path === '/sorteo') return 'Sorteo'
+    if (path === '/verificacion') return 'Verificación de DNI'
     return 'MotoBox CRM'
   }
 
@@ -131,6 +137,17 @@ export default function Layout() {
             <UsersIcon size={18} />
             Leads
           </NavLink>
+
+          {verVerificacion && (
+            <NavLink
+              to="/verificacion"
+              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <ShieldCheck size={18} />
+              Verificación DNI
+            </NavLink>
+          )}
 
           <NavLink
             to="/agenda"

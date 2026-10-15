@@ -3291,3 +3291,65 @@ body {
   .sorteo-data div { grid-template-columns: 1fr; gap: 2px; }
   .sorteo-footer .btn { flex: 1 1 100%; justify-content: center; }
 }
+
+/* ============================================
+   VERIFICACIÓN DE DNI
+   ============================================ */
+.btn-aprobar { background: var(--success); color: var(--white); }
+.btn-aprobar:hover:not(:disabled) { background: #15803D; }
+.btn-rechazar { background: #DC2626; color: var(--white); }
+.btn-rechazar:hover:not(:disabled) { background: #B91C1C; }
+.toast.warning { background: var(--warning); }
+
+.cola-resumen { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.cola-resumen .results-count { margin-left: auto; }
+.cola-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: var(--radius-full);
+  background: var(--primary-light); color: var(--primary);
+  font-size: 0.8125rem; font-weight: 600;
+}
+.cola-chip.alerta { background: rgba(220, 38, 38, 0.08); color: #DC2626; }
+.cola-chip.aviso { background: var(--warning-light); color: var(--warning); }
+
+.cola-tabla-wrap { overflow-x: auto; }
+.data-table tbody tr.cola-alerta td { background: rgba(220, 38, 38, 0.04); }
+.data-table tbody tr.cola-alerta td:first-child { box-shadow: inset 3px 0 0 #DC2626; }
+.cola-espera { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cola-espera.alerta { color: #DC2626; font-weight: 600; }
+.cola-dni {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap;
+}
+.cola-acciones { display: flex; gap: 6px; flex-wrap: wrap; }
+.data-table .cola-acciones { flex-wrap: nowrap; }
+.cola-tarjetas { display: grid; gap: 10px; margin-bottom: 20px; }
+.cola-tarjeta { padding: 14px; display: grid; gap: 8px; }
+.cola-tarjeta.cola-alerta { box-shadow: inset 3px 0 0 #DC2626; background: rgba(220, 38, 38, 0.03); }
+.cola-tarjeta-fila { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.cola-tarjeta-acciones .cola-acciones .btn { flex: 1; justify-content: center; }
+.cola-revision { font-size: 0.75rem; font-weight: 600; color: var(--warning); white-space: nowrap; }
+.data-table tbody tr.cola-panel td { background: var(--gray-100); }
+.cola-panel-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cola-panel-form .form-input { max-width: 240px; }
+.cola-error { font-size: 0.75rem; color: #DC2626; }
+
+.avisos-lista { display: grid; gap: 10px; }
+.aviso-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; border: 1px solid var(--gray-200); border-radius: var(--radius-md);
+}
+.aviso-item.fallido { box-shadow: inset 3px 0 0 #DC2626; }
+.aviso-item.manual { box-shadow: inset 3px 0 0 var(--warning); }
+.aviso-detalle { font-size: 0.75rem; color: var(--gray-500); margin-top: 2px; }
+.aviso-monto { font-size: 0.8125rem; font-weight: 600; color: var(--gray-700); }
+
+.badge-dni-pendiente { background: var(--warning-light); color: var(--warning); }
+.badge-dni-aprobado { background: var(--success-light); color: var(--success); }
+.badge-dni-rechazado { background: rgba(220, 38, 38, 0.08); color: #DC2626; }
+
+@media (max-width: 768px) {
+  .cola-resumen .results-count { margin-left: 0; }
+  .cola-panel-form .form-input { max-width: none; width: 100%; }
+}
