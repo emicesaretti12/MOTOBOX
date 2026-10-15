@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { Plus, Search, X, LayoutGrid, List, Download, Phone, MessageCircle, Trash2, Edit, CheckSquare } from 'lucide-react'
+import { ESTADO_DNI_LABELS } from '../lib/verificacion'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const ORIGEN_LABELS = { whatsapp: 'WhatsApp', facebook: 'Facebook', instagram: 'Instagram', presencial: 'Presencial', referido: 'Referido', otro: 'Otro' }
@@ -25,6 +26,7 @@ export default function LeadsPage() {
   const [filterEstado, setFilterEstado] = useState('')
   const [filterOrigen, setFilterOrigen] = useState('')
   const [filterVendedor, setFilterVendedor] = useState('')
+  const [filterDni, setFilterDni] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingLead, setEditingLead] = useState(null)
   const [formData, setFormData] = useState(EMPTY_LEAD)
@@ -68,8 +70,10 @@ export default function LeadsPage() {
     if (filterEstado && l.estado !== filterEstado) return false
     if (filterOrigen && l.origen !== filterOrigen) return false
     if (filterVendedor && l.vendedor_asignado !== filterVendedor) return false
+    if (filterDni === 'sin_dni' && l.estado_dni) return false
+    if (filterDni && filterDni !== 'sin_dni' && l.estado_dni !== filterDni) return false
     return true
-  }), [leads, search, filterEstado, filterOrigen, filterVendedor])
+  }), [leads, search, filterEstado, filterOrigen, filterVendedor, filterDni])
 
   function openModal(lead) {
     if (lead) {
@@ -204,6 +208,11 @@ export default function LeadsPage() {
           <option value="">Todo origen</option>
           {Object.entries(ORIGEN_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
+        <select className="filter-select" value={filterDni} onChange={e => setFilterDni(e.target.value)}>
+          <option value="">Todo DNI</option>
+          {Object.entries(ESTADO_DNI_LABELS).map(([k, v]) => <option key={k} value={k}>DNI {v.toLowerCase()}</option>)}
+          <option value="sin_dni">Sin DNI</option>
+        </select>
         {isAdmin && (
           <select className="filter-select" value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)}>
             <option value="">Todos los vendedores</option>
@@ -258,7 +267,10 @@ export default function LeadsPage() {
                 ) : filtered.map(l => (
                   <tr key={l.id} className={`clickable ${selected.includes(l.id) ? 'selected' : ''}`}>
                     {isAdmin && <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.includes(l.id)} onChange={() => toggleSelect(l.id)} /></td>}
-                    <td className="table-cell-primary" onClick={() => navigate(`/leads/${l.id}`)}>{l.nombre}</td>
+                    <td className="table-cell-primary" onClick={() => navigate(`/leads/${l.id}`)}>
+                      {l.nombre}
+                      {l.estado_dni && <span className={`badge badge-dni-${l.estado_dni} badge-dni-mini`}>DNI {ESTADO_DNI_LABELS[l.estado_dni]?.toLowerCase()}</span>}
+                    </td>
                     <td onClick={() => navigate(`/leads/${l.id}`)}>{l.telefono || '-'}</td>
                     <td onClick={() => navigate(`/leads/${l.id}`)}>{l.modelo_interes || '-'}</td>
                     <td onClick={() => navigate(`/leads/${l.id}`)}>{ORIGEN_LABELS[l.origen] || l.origen}</td>
@@ -297,6 +309,7 @@ export default function LeadsPage() {
                   {items.map(l => (
                     <div key={l.id} className="kanban-card" onClick={() => navigate(`/leads/${l.id}`)}>
                       <div className="kanban-card-name">{l.nombre}</div>
+                      {l.estado_dni && <span className={`badge badge-dni-${l.estado_dni} badge-dni-mini`}>DNI {ESTADO_DNI_LABELS[l.estado_dni]?.toLowerCase()}</span>}
                       {l.modelo_interes && <div className="kanban-card-model">{l.modelo_interes}</div>}
                       {l.telefono && <div className="kanban-card-meta"><Phone size={11} /> {l.telefono}</div>}
                       {l.fecha_agenda && <div className="kanban-card-meta">📅 {new Date(l.fecha_agenda).toLocaleDateString('es-AR')}</div>}

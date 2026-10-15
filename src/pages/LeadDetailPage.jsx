@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, MoreHorizontal, Edit, Plus, X, Check, Trash2 } from 'lucide-react'
+import { LEAD_ORIGEN_LABELS } from '../lib/constants'
+import VerificacionCredito from '../components/VerificacionCredito'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const TIPO_LABELS = { llamada: 'Llamada', whatsapp: 'WhatsApp', email: 'Email', visita: 'Visita', otro: 'Otro' }
@@ -213,7 +215,7 @@ export default function LeadDetailPage() {
             <div className="detail-row"><span className="detail-label">Teléfono</span><span className="detail-value">{lead.telefono || '-'}</span></div>
             <div className="detail-row"><span className="detail-label">Email</span><span className="detail-value">{lead.email || '-'}</span></div>
             <div className="detail-row"><span className="detail-label">Modelo</span><span className="detail-value">{lead.modelo_interes || '-'}</span></div>
-            <div className="detail-row"><span className="detail-label">Origen</span><span className="detail-value">{lead.origen}</span></div>
+            <div className="detail-row"><span className="detail-label">Origen</span><span className="detail-value">{LEAD_ORIGEN_LABELS[lead.origen] || lead.origen}</span></div>
             <div className="detail-row"><span className="detail-label">Presupuesto</span><span className="detail-value">{fmt$(lead.presupuesto_estimado)}</span></div>
             <div className="detail-row"><span className="detail-label">Vendedor</span><span className="detail-value">{lead.vendedor?.full_name || 'Sin asignar'}</span></div>
             <div className="detail-row"><span className="detail-label">Estado</span><span className="detail-value"><span className={`badge badge-${lead.estado}`}>{STATUS_LABELS[lead.estado]}</span></span></div>
@@ -226,6 +228,8 @@ export default function LeadDetailPage() {
 
         {/* Right Column */}
         <div>
+          <VerificacionCredito lead={lead} />
+
           {/* Interacciones */}
           <div className="card" style={{ marginBottom: 20 }}>
             <div className="card-header">

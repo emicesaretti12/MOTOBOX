@@ -3353,3 +3353,9 @@ body {
   .cola-resumen .results-count { margin-left: 0; }
   .cola-panel-form .form-input { max-width: none; width: 100%; }
 }
+
+.badge-dni-mini { margin-left: 8px; font-size: 0.625rem; padding: 2px 7px; vertical-align: middle; }
+.kanban-card .badge-dni-mini { margin-left: 0; margin-top: 4px; display: inline-block; }
+.credito-historial { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200); display: grid; gap: 8px; }
+.credito-intento { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; font-size: 0.8125rem; }
+.credito-intento .aviso-detalle { flex-basis: 100%; margin-top: 0; }

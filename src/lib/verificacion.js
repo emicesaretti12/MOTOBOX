@@ -15,6 +15,12 @@ export function etiquetaRelacion(relacion) {
   return RELACION_LABELS[relacion] || relacion.charAt(0).toUpperCase() + relacion.slice(1)
 }
 
+// Para mostrar DNIs viejos (intentos anteriores) sin exponerlos completos.
+export function enmascararDni(dni) {
+  if (!dni) return '-'
+  return '***' + String(dni).slice(-3)
+}
+
 export function segundosDesde(fecha, ahoraMs = Date.now()) {
   const t = new Date(fecha).getTime()
   if (Number.isNaN(t)) return 0
