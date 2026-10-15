@@ -1,6 +1,7 @@
-# Verificación de DNI desde el CRM — Etapa 1
+# Verificación de DNI, asignación y métricas — guía de despliegue
 
-El operador ve la cola de DNIs que mandaron los clientes por WhatsApp, los consulta en la app de la financiera y marca **Aprobado** (con monto opcional) o **Rechazado**. El CRM guarda el resultado y le pide a SendPulse que el bot le avise al cliente.
+Todo esto está en la rama `claude/wonderful-johnson-6kn9m5`. **Nada está aplicado ni desplegado en producción.**
+Cada paso de despliegue necesita OK explícito. Todo lo nuevo arranca **apagado**.
 
 ```
 Cliente (WhatsApp) ─► bot SendPulse ─► sendpulse-whatsapp-webhook ─► lead con estado_dni = pendiente
@@ -9,39 +10,42 @@ Cliente (WhatsApp) ─► bot SendPulse ─► sendpulse-whatsapp-webhook ─►
                               │ Aprobado / Rechazado
                               ▼
                         dni-resolver ── 1) guarda el resultado (con el operador)
-                              │         2) ejecuta el flujo "DNI aprobado" / "DNI rechazado"
+                              │         2) si aprobó y no tiene vendedor: asigna por turnos (trigger)
+                              │         3) ejecuta el flujo "DNI aprobado" / "DNI rechazado"
                               ▼
-                      bot SendPulse ─► le escribe al cliente ─► llama al webhook con el resultado
-                                                                 (v3: "ya registrado", no duplica)
+                      bot SendPulse ─► le escribe al cliente ─► llama al webhook ("ya registrado", no duplica)
 ```
 
-## Qué se agrega
+## Qué se agrega, por etapa
 
-| Pieza | Archivo | Qué hace |
-|---|---|---|
-| Migración 008 | `supabase/migrations/008_cola_verificacion_dni.sql` | Solo aditiva. `profiles.verifica_dni`, tablas `crm_config`, `dni_resoluciones`, `dni_tomas` y funciones SQL. Todo apagado. |
-| Edge function nueva | `supabase/functions/dni-resolver/` | Resuelve con la sesión del operador y avisa por SendPulse con reintentos. |
-| Webhook WhatsApp v3 | `supabase/functions/sendpulse-whatsapp-webhook/` | Mismo contrato que v2; idempotente; DNI enmascarado en notas. **Requiere OK aparte.** |
-| Pantalla nueva | `src/pages/VerificacionPage.jsx` | `/verificacion`, para admin y usuarios con `verifica_dni`. |
-| Cambios mínimos | `src/App.jsx`, `src/components/Layout.jsx`, `src/index.css` | Ruta, link del menú (solo visible con la cola prendida) y estilos. |
-| Script | `supabase/scripts/habilitar_verificadores.sql` | Habilita a Vendedor 1 y 2 (simulación primero). |
-| Reversa | `supabase/rollback/008_cola_verificacion_dni_reversa.sql` | Destructiva. Solo con OK. |
+| Etapa | Base de datos | Funciones | Pantallas |
+|---|---|---|---|
+| 0 | `007` documenta lo que ya está en producción (no cambia nada) | Código actual de producción copiado al repo | — |
+| 1 Cola | `008`: `profiles.verifica_dni`, `crm_config`, `dni_resoluciones`, `dni_tomas` y funciones | `dni-resolver` (nueva). `sendpulse-whatsapp-webhook` v3 (**requiere OK**) | `/verificacion` |
+| 2 Ficha y listado | — | — | Tarjeta "Verificación de crédito" en la ficha, origen "WhatsApp", filtro y badge de DNI en Leads |
+| 3 Asignación | `009`: `profiles.recibe_leads`, `asignaciones_lead` y trigger por turnos | — | Bloque "DNI aprobado — para contactar" arriba en Dashboard y Leads |
+| 4 Entrada (propuesta) | `010`: índice por teléfono, emails de relleno, `leads_duplicados`, reingreso de perdidos | Instagram v8 en `index.v8.ts` (**requiere OK**, `index.ts` sigue siendo la v7) | Bloque "Volvieron a escribir" |
+| 5 Métricas | `011`: `dni_eventos` (trigger) y `metricas_dni()` | — | `/metricas` (admin) |
 
-**No cambia:** la función de Instagram (`sendpulse-lead-webhook`), las reglas de acceso actuales (admin ve todo, cada vendedor sus leads), las pantallas existentes ni ningún dato existente.
+**No cambia:** las reglas de acceso actuales (admin ve todo; cada vendedor, solo sus leads), los datos existentes y la función de Instagram en producción.
 
-## Interruptores (`crm_config`)
+**Cambios visibles en pantallas existentes:** link "Verificación DNI" (si la cola está prendida), link "Métricas DNI" (admin, si las migraciones están aplicadas), bloques arriba de Dashboard y Leads (solo si hay leads que cumplen), filtro "Todo DNI" y badge en Leads, tarjeta de crédito en la ficha (solo leads con DNI) y origen con etiqueta en la ficha.
+
+## Interruptores (`crm_config`, se cambian con un UPDATE, sin redesplegar)
 
 | Clave | Por defecto | Efecto |
 |---|---|---|
-| `cola_dni_activa` | `false` | Muestra la pantalla y permite resolver desde el CRM. |
-| `aviso_sendpulse_activo` | `false` | Al resolver, ejecuta el flujo en SendPulse. Apagado: el resultado se guarda y queda "avisar a mano". |
-| `alerta_espera_minutos` | `15` | Desde cuántos minutos una consulta se resalta en rojo. |
-| `toma_expira_minutos` | `5` | Cuánto dura la reserva "en revisión por X". |
+| `cola_dni_activa` | `false` | Muestra la cola y permite resolver desde el CRM |
+| `aviso_sendpulse_activo` | `false` | Al resolver, ejecuta el flujo en SendPulse |
+| `asignacion_automatica_activa` | `false` | Al aprobarse un DNI, asigna por turnos |
+| `reingreso_perdidos_activo` | `false` | Un perdido que vuelve a escribir pasa a nuevo (mismo vendedor) |
+| `alerta_espera_minutos` | `15` | Desde cuándo se resalta una consulta en la cola |
+| `toma_expira_minutos` | `5` | Duración de la reserva "en revisión por X" |
+| `emails_relleno` | `["x@gmail.com"]` | Emails que no se usan para buscar duplicados |
 
 ```sql
--- Prender / apagar (instantáneo, sin redesplegar)
 UPDATE public.crm_config SET valor = 'true',  updated_at = now() WHERE clave = 'cola_dni_activa';
-UPDATE public.crm_config SET valor = 'false', updated_at = now() WHERE clave = 'aviso_sendpulse_activo';
+UPDATE public.crm_config SET valor = 'false', updated_at = now() WHERE clave = 'asignacion_automatica_activa';
 UPDATE public.crm_config SET valor = '20',    updated_at = now() WHERE clave = 'alerta_espera_minutos';
 ```
 
@@ -49,81 +53,90 @@ UPDATE public.crm_config SET valor = '20',    updated_at = now() WHERE clave = '
 
 | Variable | Valor | Para qué |
 |---|---|---|
-| `SENDPULSE_API_URL` | `https://api.sendpulse.com` | URL base de la API de SendPulse. |
-| `SENDPULSE_CLIENT_ID` | (SendPulse > Configuración > API) | Pedir el token OAuth. **Cargalo vos en Supabase, no lo pegues en el chat.** |
-| `SENDPULSE_CLIENT_SECRET` | (SendPulse > Configuración > API) | Ídem. |
-| `SENDPULSE_FLOW_APROBADO_ID` | `6ad102ff405e6a7b3c02e05e` | Flujo "DNI aprobado". |
-| `SENDPULSE_FLOW_RECHAZADO_ID` | `6ad1037fc9dc7687a909da19` | Flujo "DNI rechazado". |
-| `CRM_ALLOWED_ORIGINS` | opcional, ej. `https://tu-crm.vercel.app` | Si se carga, solo ese dominio puede llamar a `dni-resolver` desde el navegador. |
+| `SENDPULSE_API_URL` | `https://api.sendpulse.com` | URL base de la API |
+| `SENDPULSE_CLIENT_ID` | SendPulse > Configuración > API | Token OAuth. **Cargala vos, no la pegues en el chat** |
+| `SENDPULSE_CLIENT_SECRET` | SendPulse > Configuración > API | Ídem |
+| `SENDPULSE_FLOW_APROBADO_ID` | `6ad102ff405e6a7b3c02e05e` | Flujo "DNI aprobado" |
+| `SENDPULSE_FLOW_RECHAZADO_ID` | `6ad1037fc9dc7687a909da19` | Flujo "DNI rechazado" |
+| `CRM_ALLOWED_ORIGINS` | opcional, dominio del CRM | Si se carga, solo el CRM puede llamar a `dni-resolver` desde el navegador |
 
-Sin cambios: `SENDPULSE_WEBHOOK_SECRET`. `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` las pone Supabase.
+Sin cambios: `SENDPULSE_WEBHOOK_SECRET`. Las variables `SUPABASE_*` las pone Supabase. No hay variables nuevas en el frontend.
 
-Endpoints usados: `POST {SENDPULSE_API_URL}/oauth/access_token` y `POST {SENDPULSE_API_URL}/whatsapp/flows/run` con `{ contact_id, flow_id }`. Confirmados contra un cliente de terceros; falta validarlos en la documentación oficial (bloqueada desde el entorno de desarrollo) o en el piloto.
+Endpoints de SendPulse usados: `POST {SENDPULSE_API_URL}/oauth/access_token` y `POST {SENDPULSE_API_URL}/whatsapp/flows/run` con `{ contact_id, flow_id }`.
+Están confirmados contra un cliente de terceros; falta validarlos en la documentación oficial o en el piloto.
 
-## Despliegue (cada paso, con OK)
+## Despliegue (cada paso con OK; después de cada uno, verificar)
 
-1. **Backup nuevo** de lo que se toca: `CREATE SCHEMA backup_AAAAMMDD; CREATE TABLE backup_AAAAMMDD.leads AS SELECT * FROM public.leads; CREATE TABLE backup_AAAAMMDD.profiles AS SELECT * FROM public.profiles;` + `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` en cada copia.
-2. **Migración 008.** Verificar: `SELECT clave, valor FROM crm_config;` (todo `false`) y `SELECT count(*) FROM leads;` (igual que antes).
-3. **Secrets** de la tabla de arriba.
-4. **Desplegar `dni-resolver`** (con verificación de JWT, la opción por defecto).
-5. **Desplegar el frontend** (Vercel). Con la cola apagada no se ve nada nuevo.
-6. **Verificadores:** `supabase/scripts/habilitar_verificadores.sql` (simulación → OK → aplicar).
-7. **Webhook v3** (si lo aprobás). Si no: sacar la llamada al webhook de los flujos "DNI aprobado" y "DNI rechazado" **antes** del paso 9.
-8. **Prender la cola**: `cola_dni_activa = true`. Se puede resolver; el aviso todavía es manual.
-9. **Piloto con aviso**: `aviso_sendpulse_activo = true` y probar el circuito (abajo).
+1. **Backup nuevo:** `CREATE SCHEMA backup_AAAAMMDD;` y copias de `leads`, `profiles` e `historial_cambios` (con RLS activado en cada copia). Además, un dump fuera de Supabase.
+2. **Migraciones 008 y 009.** Verificar: `SELECT clave, valor FROM crm_config;` (todo apagado), `SELECT count(*) FROM leads;` (igual que antes) y que el CRM ande igual.
+3. **Secrets** de la tabla de arriba y **desplegar `dni-resolver`** (con verificación de JWT, la opción por defecto).
+4. **Frontend** (Vercel). Con todo apagado, lo único nuevo visible es el filtro de DNI, la tarjeta de crédito y el origen con etiqueta en la ficha.
+5. **Scripts** `supabase/scripts/habilitar_verificadores.sql` y `habilitar_rotacion.sql`: simulación → OK → aplicar.
+6. **Webhook WhatsApp v3.** Si no se aprueba, hay que sacar la llamada al webhook de los flujos "DNI aprobado" y "DNI rechazado" **antes** del paso 8.
+7. **Prender** `cola_dni_activa` y `asignacion_automatica_activa`.
+8. **Piloto:** prender `aviso_sendpulse_activo` y hacer la prueba de abajo.
+9. **Migración 011** (métricas). Los eventos de DNI se cuentan desde acá.
+10. **Etapa 4, por separado y con OK:** migración 010; después `duplicados_unificar.sql` (simulación → OK → aplicar); Instagram v8 (reemplazar `index.ts` por `index.v8.ts`); y por último prender `reingreso_perdidos_activo`.
 
 ## Prueba del circuito completo
 
-Con un WhatsApp que **no** esté cargado como lead (por ejemplo el tuyo personal):
+Con un WhatsApp que **no** esté cargado como lead:
 
-1. Escribirle al bot y mandar nombre + DNI (el tuyo).
-   → En `/verificacion` aparece en menos de 15 s, con relación "Titular", intento #1 y la espera corriendo.
-2. Tocar **Rechazado** → confirmar.
-   → Aviso verde "El cliente fue avisado por WhatsApp". En el teléfono llega el mensaje del flujo "DNI rechazado" pidiendo otro DNI.
-   → En el lead: nota `CRM: DNI rechazado por …` y en el historial "Verificación DNI: rechazado".
+1. Escribirle al bot y mandar nombre + DNI.
+   → En `/verificacion` aparece en menos de 15 s, "Titular", intento #1, con la espera corriendo.
+2. **Rechazado** → confirmar.
+   → Aviso "El cliente fue avisado por WhatsApp" y llega el mensaje del flujo "DNI rechazado".
 3. Mandar otro DNI como familiar.
    → Vuelve a la cola como intento #2, "Familiar".
-4. Desde otra sesión (otro operador) abrir el mismo con **Aprobado**: tiene que decir "Lo está revisando …".
-5. Tocar **Aprobado**, monto `1.500.000` → confirmar.
-   → Llega el mensaje del flujo "DNI aprobado". El lead queda `estado_dni = aprobado`, `monto_aprobado = 1500000`.
-6. Verificar que no hubo doble registro:
+4. Desde otra sesión, abrir el mismo con **Aprobado**.
+   → Tiene que decir "Lo está revisando …".
+5. **Aprobado**, monto `1.500.000` → confirmar.
+   → Llega el mensaje del flujo "DNI aprobado".
+   → El lead queda `aprobado`, `monto_aprobado = 1500000` y **asignado por turno** (Vendedor 1 o 2).
+   → En el historial: "Verificación DNI: aprobado ($1.500.000)" y "Asignación automática: Vendedor X (por turno, DNI aprobado)".
+6. Entrar como ese vendedor: el lead aparece arriba, en "DNI aprobado — para contactar". En la ficha se ven el DNI, el monto y los dos intentos.
+7. Verificar que no hubo doble registro:
    ```sql
-   SELECT l.estado_dni, l.monto_aprobado, l.dni_intentos,
+   SELECT l.estado_dni, l.monto_aprobado, l.dni_intentos, p.full_name AS vendedor,
           (SELECT count(*) FROM dni_resoluciones r WHERE r.lead_id = l.id) AS resoluciones,
           (SELECT string_agg(r.aviso_estado, ', ' ORDER BY r.intento) FROM dni_resoluciones r WHERE r.lead_id = l.id) AS avisos
-     FROM leads l WHERE l.telefono LIKE '%<últimos 8 dígitos>';
-   -- aprobado | 1500000 | 2 | 2 | enviado, enviado
+     FROM leads l LEFT JOIN profiles p ON p.id = l.vendedor_asignado
+    WHERE l.telefono LIKE '%<últimos 8 dígitos>';
+   -- aprobado | 1500000 | 2 | Vendedor X | 2 | enviado, enviado
    ```
-7. Probar el fallo: cargar mal `SENDPULSE_FLOW_APROBADO_ID`, aprobar otro DNI de prueba → el resultado se guarda y aparece en "Sin avisar al cliente". Corregir el ID y tocar **Reintentar aviso**.
-8. Comprobar que no se rompió nada: `SELECT count(*) FROM leads;` y entrar como Vendedor 1 a Leads y Dashboard.
+8. Probar la falla: poner mal `SENDPULSE_FLOW_APROBADO_ID` y aprobar otro DNI de prueba.
+   → El resultado se guarda y aparece en "Sin avisar al cliente". Corregir el ID y tocar **Reintentar aviso**.
+9. Comprobar que no se rompió nada: `SELECT count(*) FROM leads;`, y entrar como Vendedor 1 a Leads, Dashboard y Agenda.
 
-La asignación automática a vendedores es de la Etapa 3: en esta etapa el lead aprobado queda sin vendedor.
+## Volver atrás (de menor a mayor; los pasos 1 a 4 no tocan datos)
 
-## Volver atrás (de menor a mayor)
-
-1. **Apagar** (instantáneo, sin tocar datos):
+1. **Apagar los interruptores** (instantáneo):
    ```sql
    UPDATE public.crm_config SET valor = 'false', updated_at = now()
-    WHERE clave IN ('cola_dni_activa', 'aviso_sendpulse_activo');
+    WHERE clave IN ('cola_dni_activa', 'aviso_sendpulse_activo', 'asignacion_automatica_activa', 'reingreso_perdidos_activo');
    ```
-   La pantalla desaparece del menú y el CRM deja de llamar a SendPulse. El bot sigue funcionando como hoy.
-2. **Webhook:** volver a desplegar la v2 (`git show 46c01de:supabase/functions/sendpulse-whatsapp-webhook/index.ts`).
-3. **Frontend:** *Instant Rollback* en Vercel al deploy anterior.
-4. **Edge function:** borrar `dni-resolver` desde el panel de Supabase.
-5. **Verificadores:** sección "PARA DESHACER" de `habilitar_verificadores.sql`.
-6. **Base (destructivo, último recurso, solo con OK):** `supabase/rollback/008_cola_verificacion_dni_reversa.sql`. Exportar antes `dni_resoluciones`.
+2. **Webhooks:** volver a desplegar la versión anterior: WhatsApp v2 (`git show 46c01de:supabase/functions/sendpulse-whatsapp-webhook/index.ts`) e Instagram v7 (`index.ts` de esta rama).
+3. **Frontend:** *Instant Rollback* en Vercel.
+4. **`dni-resolver`:** borrarla desde el panel de Supabase.
+5. **Scripts:** sección "PARA DESHACER" de cada uno.
+6. **Base (destructivo, último recurso, solo con OK)**, en este orden: `supabase/rollback/011…`, `010…`, `009…`, `008…`. Antes, exportar `dni_resoluciones`, `asignaciones_lead`, `leads_duplicados` y `dni_eventos`. Está probado que deja el esquema como producción hoy y los leads intactos (`tests/sql/reversa.test.js`).
 
-Ningún paso borra ni modifica leads existentes.
+## Duplicados (simulación en producción, solo lectura, 16/10)
+
+- **Grupos con el mismo teléfono:** 71 grupos, 154 leads (últimos 10 dígitos).
+- **Se marcarían como copia:** 66 leads, en 57 grupos. Quedan en `leads_duplicados`; ningún lead se borra ni se modifica.
+- **Para revisar a mano:** 14 grupos, todos por tener vendedores distintos.
+- **Origen de las copias:** 64 se cargaron a mano y 17 vinieron de Instagram.
 
 ## Tests
 
 ```bash
 npm install
-npm test        # 67 tests: SQL sobre una copia del esquema de producción (PGlite), edge functions y pantalla
+npm test
 ```
 
-- `tests/sql/`: cola, permisos, reservas, resolución atómica, webhook idempotente.
-- `tests/unit/`: cliente SendPulse (token, reintentos, 401), `dni-resolver`, webhook v3, helpers de la pantalla.
+- `tests/sql/`: cola, permisos, reservas, resolución, webhook idempotente, asignación, entrada de leads, métricas y vuelta atrás. Corren sobre una copia del esquema de producción, con PGlite (Postgres en memoria).
+- `tests/unit/`: cliente SendPulse, `dni-resolver`, webhooks de WhatsApp v3 e Instagram v8, y helpers de las pantallas.
 - `tests/integracion/`: circuito completo webhook → cola → resolver → SendPulse simulado → webhook.
 
-Limitación: PGlite tiene una sola conexión, así que "dos operadores a la vez" se prueba en secuencia. La exclusión real la da el bloqueo de fila (`SELECT … FOR UPDATE`) de Postgres.
+Limitación: PGlite tiene una sola conexión, así que la concurrencia real (dos operadores en el mismo milisegundo) la garantiza el bloqueo de fila de Postgres (`SELECT … FOR UPDATE` y el lock de la asignación), no un test.
