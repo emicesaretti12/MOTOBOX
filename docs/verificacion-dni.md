@@ -7,19 +7,19 @@ Todo esto está en la rama `claude/wonderful-johnson-6kn9m5`. Todo lo nuevo arra
 | Pieza | Estado |
 |---|---|
 | Backup `backup_20261016` (todas las tablas de `public`, con RLS) | Hecho. 857 leads, 7034 filas de historial |
-| `008` cola, partes 1, 2a y 2b (tablas, interruptores, cola, reservas, avisos, `dni_webhook_recibido`, permisos) | Aplicada |
-| `008` parte 3: `dni_soltar`, `dni_resolver`, `dni_webhook_resultado` | **Pendiente**: la herramienta de Supabase pide confirmación porque contienen `DELETE` (solo de reservas en `dni_tomas`). Aplicar `supabase/migrations/008_cola_verificacion_dni.sql` completo desde el SQL Editor es equivalente |
-| `009` asignación por turnos | Aplicada. **Prendida** (`asignacion_automatica_activa = true`) |
+| `008` cola (partes 1, 2a, 2b y 3) | Aplicada. La parte 3 (`dni_soltar`, `dni_resolver`, `dni_webhook_resultado`) se corrió desde el SQL Editor con `supabase/scripts/cola_parte3_sql_editor.sql` |
+| `009` asignación por turnos | Aplicada y **prendida** |
 | `011` métricas | Aplicada. Los eventos de DNI se cuentan desde el 15/10 |
 | `010` entrada de leads | No aplicada (etapa 4, necesita OK aparte) |
-| `dni-resolver` | Desplegada (versión 1, verifica JWT) |
-| `sendpulse-whatsapp-webhook` | Sigue la **v4**. La v5 (v4 + `resultado` sin doble registro) se despliega después de la parte 3 |
-| Secrets de SendPulse | **Pendiente**: cargarlos en Supabase > Edge Functions > Secrets |
+| `dni-resolver` | Desplegada (verifica JWT) |
+| `sendpulse-whatsapp-webhook` | **v5** desplegada (v4 + `resultado` sin doble registro) |
+| Secrets de SendPulse | Cargados. Los 3 valores fijos verificados por huella SHA256 |
 | Vendedor 1 y Vendedor 2 | `verifica_dni = true` y `recibe_leads = true` |
-| `cola_dni_activa`, `aviso_sendpulse_activo` | Apagados hasta completar la parte 3 y los secrets |
+| Interruptores | `cola_dni_activa`, `aviso_sendpulse_activo` y `asignacion_automatica_activa` **prendidos** |
+| Frontend | Publicado en `main` (88a95b4); Vercel despliega desde ahí |
 
 Las migraciones en producción quedaron registradas como `cola_verificacion_dni_1_tablas`, `cola_verificacion_dni_2a_cola`,
-`cola_verificacion_dni_2b_webhook_y_seguridad`, `asignacion_round_robin` y `metricas_dni`. El contenido es el de los archivos
+`cola_verificacion_dni_2b_webhook_y_seguridad`, `asignacion_round_robin` y `metricas_dni` (la parte 3 no queda en esa lista porque se corrió desde el SQL Editor). El contenido es el de los archivos
 `008`, `009` y `011`: las funciones se compararon por huella (md5) contra el repo. Las únicas diferencias son algunos
 comentarios internos y que las políticas y triggers se crearon sin el `DROP … IF EXISTS` previo, porque no existían.
 
