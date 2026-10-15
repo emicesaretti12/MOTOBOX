@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { Plus, Search, X, LayoutGrid, List, Download, Phone, MessageCircle, Trash2, Edit, CheckSquare } from 'lucide-react'
 import { ESTADO_DNI_LABELS } from '../lib/verificacion'
+import ParaContactar from '../components/ParaContactar'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const ORIGEN_LABELS = { whatsapp: 'WhatsApp', facebook: 'Facebook', instagram: 'Instagram', presencial: 'Presencial', referido: 'Referido', otro: 'Otro' }
@@ -194,6 +195,8 @@ export default function LeadsPage() {
 
   return (
     <div>
+      <ParaContactar leads={leads} isAdmin={isAdmin} />
+
       {/* Filters */}
       <div className="filters-bar">
         <div className="search-input-wrap">

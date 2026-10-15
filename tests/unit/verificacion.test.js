@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   etiquetaRelacion, segundosDesde, formatEspera, parseMonto, formatMonto, leerConfig, puedeVerificar,
-  mensajeMotivo, motivoDeErrorRpc, datosDeErrorFuncion, mensajeResultado,
+  mensajeMotivo, motivoDeErrorRpc, datosDeErrorFuncion, mensajeResultado, leadsParaContactar, enmascararDni,
 } from '../../src/lib/verificacion.js'
 
 describe('helpers de la cola de verificación', () => {
@@ -72,5 +72,31 @@ describe('helpers de la cola de verificación', () => {
     expect(await datosDeErrorFuncion(error)).toEqual({ ok: false, motivo: 'YA_RESUELTO' })
     expect(await datosDeErrorFuncion({ context: new Response('no json') })).toEqual({ motivo: null })
     expect(await datosDeErrorFuncion(null)).toEqual({ motivo: null })
+  })
+})
+
+describe('leads para contactar', () => {
+  const ahora = Date.parse('2026-10-16T12:00:00Z')
+  it('aprobados sin contactar y perdidos que volvieron, los más viejos primero', () => {
+    const leads = [
+      { id: 'a2', estado: 'nuevo', estado_dni: 'aprobado', dni_actualizado_at: '2026-10-16T11:00:00Z' },
+      { id: 'a1', estado: 'nuevo', estado_dni: 'aprobado', dni_actualizado_at: '2026-10-16T09:00:00Z' },
+      { id: 'contactado', estado: 'contactado', estado_dni: 'aprobado' },
+      { id: 'pendiente', estado: 'nuevo', estado_dni: 'pendiente' },
+      { id: 'v1', estado: 'nuevo', reingreso_at: '2026-10-15T12:00:00Z' },
+      { id: 'viejo', estado: 'nuevo', reingreso_at: '2026-10-01T12:00:00Z' },
+      { id: 'sigue-perdido', estado: 'perdido', reingreso_at: '2026-10-16T10:00:00Z' },
+    ]
+    const r = leadsParaContactar(leads, ahora)
+    expect(r.aprobados.map(l => l.id)).toEqual(['a1', 'a2'])
+    expect(r.volvieron.map(l => l.id)).toEqual(['v1'])
+    expect(leadsParaContactar(null)).toEqual({ aprobados: [], volvieron: [] })
+  })
+})
+
+describe('enmascarar DNI', () => {
+  it('muestra solo los últimos 3 dígitos', () => {
+    expect(enmascararDni('30111222')).toBe('***222')
+    expect(enmascararDni(null)).toBe('-')
   })
 })

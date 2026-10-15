@@ -67,6 +67,23 @@ export function leerConfig(filas) {
   }
 }
 
+const DIAS_REINGRESO = 7
+
+// Leads que el vendedor tiene que contactar ya: DNI aprobado y todavía en "nuevo",
+// y los perdidos que volvieron a escribir en los últimos días. Los más viejos primero.
+export function leadsParaContactar(leads, ahoraMs = Date.now()) {
+  const nuevos = (leads || []).filter(l => l.estado === 'nuevo')
+  const fecha = v => new Date(v || 0).getTime()
+  const aprobados = nuevos
+    .filter(l => l.estado_dni === 'aprobado')
+    .sort((a, b) => fecha(a.dni_actualizado_at) - fecha(b.dni_actualizado_at))
+  const limite = ahoraMs - DIAS_REINGRESO * 86400000
+  const volvieron = nuevos
+    .filter(l => l.reingreso_at && fecha(l.reingreso_at) >= limite && l.estado_dni !== 'aprobado')
+    .sort((a, b) => fecha(a.reingreso_at) - fecha(b.reingreso_at))
+  return { aprobados, volvieron }
+}
+
 export function puedeVerificar(profile) {
   return profile?.role === 'admin' || profile?.verifica_dni === true
 }

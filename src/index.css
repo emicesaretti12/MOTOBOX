@@ -3359,3 +3359,21 @@ body {
 .credito-historial { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray-200); display: grid; gap: 8px; }
 .credito-intento { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; font-size: 0.8125rem; }
 .credito-intento .aviso-detalle { flex-basis: 100%; margin-top: 0; }
+
+/* Para contactar ahora (Dashboard y Leads) */
+.contactar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.contactar-card.aprobados { box-shadow: inset 3px 0 0 var(--success), var(--shadow-sm); }
+.contactar-card.volvieron { box-shadow: inset 3px 0 0 var(--warning), var(--shadow-sm); }
+.contactar-card .card-header h3 { display: inline-flex; align-items: center; gap: 6px; }
+.contactar-card.aprobados .card-header h3 { color: var(--success); }
+.contactar-card.volvieron .card-header h3 { color: var(--warning); }
+.contactar-fila { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--gray-100); }
+.contactar-fila:last-child { border-bottom: none; }
+.contactar-nombre {
+  background: none; border: none; padding: 0; text-align: left; cursor: pointer;
+  font: inherit; font-weight: 600; color: var(--gray-900); display: grid; gap: 2px;
+}
+.contactar-nombre:hover { color: var(--primary); }
+.btn-whatsapp-contactar { background: rgba(37, 211, 102, 0.1); color: #128C7E; white-space: nowrap; }
+.btn-whatsapp-contactar:hover { background: rgba(37, 211, 102, 0.18); }
+@media (max-width: 768px) { .contactar-grid { grid-template-columns: 1fr; } }

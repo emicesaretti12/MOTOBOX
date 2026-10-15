@@ -7,7 +7,7 @@ describe('migraciones', () => {
     await db.exec(leerSql('supabase/migrations/008_cola_verificacion_dni.sql'))
     await db.exec(leerSql('supabase/migrations/007_leads_verificacion_dni.sql'))
     const { rows } = await db.query(`SELECT clave, valor FROM public.crm_config ORDER BY clave`)
-    expect(rows.map(r => r.clave)).toEqual(['alerta_espera_minutos', 'aviso_sendpulse_activo', 'cola_dni_activa', 'toma_expira_minutos'])
+    expect(rows.map(r => r.clave)).toEqual(expect.arrayContaining(['alerta_espera_minutos', 'aviso_sendpulse_activo', 'cola_dni_activa', 'toma_expira_minutos']))
   })
 
   it('arranca todo apagado', async () => {

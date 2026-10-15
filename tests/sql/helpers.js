@@ -15,11 +15,17 @@ export const U = {
   sinPermiso: '00000000-0000-0000-0000-0000000000c1',
 }
 
-export async function crearBase({ cola = true, aviso = true } = {}) {
+// Migraciones nuevas, en orden. Los tests corren sobre el estado final.
+export const MIGRACIONES = [
+  'supabase/migrations/008_cola_verificacion_dni.sql',
+  'supabase/migrations/009_asignacion_round_robin.sql',
+]
+
+export async function crearBase({ cola = true, aviso = true, asignacion = false } = {}) {
   const db = new PGlite()
   await db.exec(leerSql('tests/sql/fixtures/supabase_stub.sql'))
   await db.exec(leerSql('tests/sql/fixtures/esquema_produccion.sql'))
-  await db.exec(leerSql('supabase/migrations/008_cola_verificacion_dni.sql'))
+  for (const m of MIGRACIONES) await db.exec(leerSql(m))
 
   const perfiles = [
     [U.admin, '20000001', 'Admin Uno', 'admin', false],
@@ -36,6 +42,7 @@ export async function crearBase({ cola = true, aviso = true } = {}) {
   }
   await db.query(`UPDATE public.crm_config SET valor = $1::jsonb WHERE clave = 'cola_dni_activa'`, [JSON.stringify(cola)])
   await db.query(`UPDATE public.crm_config SET valor = $1::jsonb WHERE clave = 'aviso_sendpulse_activo'`, [JSON.stringify(aviso)])
+  await db.query(`UPDATE public.crm_config SET valor = $1::jsonb WHERE clave = 'asignacion_automatica_activa'`, [JSON.stringify(asignacion)])
   return db
 }
 

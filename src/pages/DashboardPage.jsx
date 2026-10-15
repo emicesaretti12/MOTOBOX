@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { Users, Award, Target, DollarSign, ChevronRight, Phone, MessageCircle, Calendar, Flame, Snowflake, Clock, Zap, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react'
+import ParaContactar from '../components/ParaContactar'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const STATUS_COLORS = { nuevo: '#2563EB', contactado: '#D97706', en_negociacion: '#7C3AED', venta_cerrada: '#16A34A', perdido: '#71717A' }
@@ -250,6 +251,8 @@ export default function DashboardPage() {
 
   return (
     <div>
+      <ParaContactar leads={leads} isAdmin={isAdmin} />
+
       {/* KPIs */}
       <div className="stats-row">
         <div className="stat-card">
