@@ -20,6 +20,7 @@ export const MIGRACIONES = [
   'supabase/migrations/008_cola_verificacion_dni.sql',
   'supabase/migrations/009_asignacion_round_robin.sql',
   'supabase/migrations/010_entrada_leads.sql',
+  'supabase/migrations/011_metricas_dni.sql',
 ]
 
 export async function crearBase({ cola = true, aviso = true, asignacion = false } = {}) {

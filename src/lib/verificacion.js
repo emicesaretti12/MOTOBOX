@@ -60,6 +60,8 @@ export function leerConfig(filas) {
   const mapa = Object.fromEntries((filas || []).map(f => [f.clave, f.valor]))
   const numero = (v, defecto) => (typeof v === 'number' && v > 0 ? v : defecto)
   return {
+    // false si la tabla no existe todavía (migraciones sin aplicar): se ocultan las pantallas nuevas.
+    disponible: Array.isArray(filas) && filas.length > 0,
     colaDniActiva: mapa.cola_dni_activa === true,
     avisoSendpulseActivo: mapa.aviso_sendpulse_activo === true,
     alertaEsperaMinutos: numero(mapa.alerta_espera_minutos, 15),

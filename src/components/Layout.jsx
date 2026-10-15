@@ -19,6 +19,7 @@ import {
   DollarSign,
   Briefcase,
   ShieldCheck,
+  BarChart3,
 } from 'lucide-react'
 
 export default function Layout() {
@@ -43,6 +44,7 @@ export default function Layout() {
     if (path === '/web-config') return 'Configurar Web Pública'
     if (path === '/sorteo') return 'Sorteo'
     if (path === '/verificacion') return 'Verificación de DNI'
+    if (path === '/metricas') return 'Métricas de verificación'
     return 'MotoBox CRM'
   }
 
@@ -161,6 +163,17 @@ export default function Layout() {
           {isAdmin && (
             <>
               <span className="sidebar-section-label">Administración</span>
+
+              {crmConfig?.disponible && (
+                <NavLink
+                  to="/metricas"
+                  className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <BarChart3 size={18} />
+                  Métricas DNI
+                </NavLink>
+              )}
 
               <NavLink
                 to="/monitor"

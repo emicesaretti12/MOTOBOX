@@ -3377,3 +3377,8 @@ body {
 .btn-whatsapp-contactar { background: rgba(37, 211, 102, 0.1); color: #128C7E; white-space: nowrap; }
 .btn-whatsapp-contactar:hover { background: rgba(37, 211, 102, 0.18); }
 @media (max-width: 768px) { .contactar-grid { grid-template-columns: 1fr; } }
+
+/* Métricas */
+.stat-card-icon.rojo { background: rgba(220, 38, 38, 0.08); color: #DC2626; }
+.metricas-tiles { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.metricas-tabla th:not(:first-child), .metricas-tabla td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }

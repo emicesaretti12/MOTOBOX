@@ -37,7 +37,7 @@ describe('helpers de la cola de verificación', () => {
   })
 
   it('config: si no se pudo leer, todo apagado', () => {
-    expect(leerConfig(null)).toEqual({ colaDniActiva: false, avisoSendpulseActivo: false, alertaEsperaMinutos: 15, tomaExpiraMinutos: 5 })
+    expect(leerConfig(null)).toEqual({ disponible: false, colaDniActiva: false, avisoSendpulseActivo: false, alertaEsperaMinutos: 15, tomaExpiraMinutos: 5 })
     expect(leerConfig([
       { clave: 'cola_dni_activa', valor: true },
       { clave: 'aviso_sendpulse_activo', valor: false },

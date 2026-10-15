@@ -15,6 +15,7 @@ import ClientsPage from './pages/ClientsPage'
 import WebSettingsPage from './pages/WebSettingsPage'
 import SorteoPage from './pages/SorteoPage'
 import VerificacionPage from './pages/VerificacionPage'
+import MetricasPage from './pages/MetricasPage'
 import Layout from './components/Layout'
 import { puedeVerificar } from './lib/verificacion'
 
@@ -98,6 +99,14 @@ function AppRoutes() {
             <VerificadorRoute>
               <VerificacionPage />
             </VerificadorRoute>
+          }
+        />
+        <Route
+          path="metricas"
+          element={
+            <ProtectedRoute adminOnly>
+              <MetricasPage />
+            </ProtectedRoute>
           }
         />
         <Route
