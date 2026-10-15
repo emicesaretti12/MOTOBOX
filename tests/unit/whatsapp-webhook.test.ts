@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { handleRequest, secretoValido, type Dependencias } from '../../supabase/functions/sendpulse-whatsapp-webhook/handler.ts'
+import { handleRequest, secretoValido, type Dependencias } from '../../supabase/functions/sendpulse-whatsapp-webhook/handler.v3.ts'
 
 function pedido(body: unknown, { secreto = 'secreto-ok', method = 'POST' } = {}) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }

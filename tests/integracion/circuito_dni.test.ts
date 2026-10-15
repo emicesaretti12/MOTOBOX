@@ -3,7 +3,7 @@
 // -> el flujo de SendPulse confirma por el webhook sin duplicar nada.
 import { describe, it, expect, beforeEach } from 'vitest'
 import { crearBase, como, comoServicio, lead, historial, U } from '../sql/helpers.js'
-import { handleRequest as webhook } from '../../supabase/functions/sendpulse-whatsapp-webhook/handler.ts'
+import { handleRequest as webhook } from '../../supabase/functions/sendpulse-whatsapp-webhook/handler.v3.ts'
 import { handleRequest as resolver, type Dependencias } from '../../supabase/functions/dni-resolver/handler.ts'
 
 type Db = Awaited<ReturnType<typeof crearBase>>

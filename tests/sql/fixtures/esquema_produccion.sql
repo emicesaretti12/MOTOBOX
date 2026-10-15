@@ -174,3 +174,11 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SC
 REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM authenticated;
 REVOKE SELECT ON public.leads, public.interacciones, public.historial_cambios, public.profiles FROM anon;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLES FROM anon;
+
+-- Columnas agregadas en producción el 15/10 (migración leads_forma_pago_anticipo_usada, ver 007b).
+ALTER TABLE public.leads ADD COLUMN forma_pago TEXT;
+ALTER TABLE public.leads ADD COLUMN anticipo TEXT;
+ALTER TABLE public.leads ADD COLUMN usada_detalle TEXT;
+ALTER TABLE public.leads ADD COLUMN prioridad TEXT;
+ALTER TABLE public.leads ADD CONSTRAINT leads_forma_pago_check CHECK (forma_pago IS NULL OR forma_pago = ANY (ARRAY['cuotas', 'anticipo_cuotas', 'contado']));
+ALTER TABLE public.leads ADD CONSTRAINT leads_prioridad_check CHECK (prioridad IS NULL OR prioridad = ANY (ARRAY['alta', 'media', 'baja']));

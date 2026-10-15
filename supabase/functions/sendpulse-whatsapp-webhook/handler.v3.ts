@@ -1,3 +1,7 @@
+// ARCHIVO: propuesta v3, NO desplegada. Quedó superada por la v4 que se desplegó en paralelo (index.ts).
+// Se conserva por sus reglas (no sumar intento por el mismo DNI, no volver a pendiente un aprobado,
+// DNI enmascarado en notas) para portarlas a la v4 más adelante. Sus tests siguen corriendo.
+
 // Lógica del webhook de WhatsApp (v3), separada del arranque de Deno para poder testearla.
 // Mismo contrato que v2 (mismos campos de entrada, mismas respuestas), con estos cambios:
 //   * La búsqueda y la escritura del lead se hacen en una sola transacción en la base
