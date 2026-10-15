@@ -531,9 +531,10 @@ END;
 $$;
 
 -- Resultado informado por los flujos "DNI aprobado" / "DNI rechazado".
---   pendiente (o sin DNI) -> lo registra (resultado disparado a mano desde Chats de SendPulse)
---   mismo resultado       -> no hace nada (ya lo registró el CRM)
---   resultado distinto    -> no pisa nada y deja una nota para revisar
+--   pendiente (o sin DNI)   -> lo registra (resultado disparado a mano desde Chats de SendPulse)
+--   mismo resultado         -> no hace nada (ya lo registró el CRM)
+--   rechazado -> aprobado   -> corrección: lo registra
+--   aprobado -> rechazado   -> no pisa nada y deja una nota para revisar
 CREATE OR REPLACE FUNCTION public.dni_webhook_resultado(p_contact_id TEXT, p_telefono TEXT, p_resultado TEXT, p_monto NUMERIC)
 RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
@@ -581,6 +582,29 @@ BEGIN
 
   IF l.estado_dni = v_res THEN
     RETURN jsonb_build_object('lead_id', v_id, 'estado', 'ya_registrado', 'estado_dni', v_res);
+  END IF;
+
+  -- Corrección: un DNI que figuraba rechazado y alguien aprueba a mano desde SendPulse.
+  IF l.estado_dni = 'rechazado' AND v_res = 'aprobado' THEN
+    v_monto := CASE WHEN p_monto IS NOT NULL AND p_monto >= 0 THEN p_monto END;
+    UPDATE public.leads
+       SET estado_dni = 'aprobado',
+           monto_aprobado = v_monto,
+           dni_actualizado_at = now(),
+           notas = concat_ws(E'\n', NULLIF(notas, ''),
+                     format('[%s] SendPulse: DNI corregido de rechazado a aprobado%s', public.crm_ahora_texto(),
+                            CASE WHEN v_monto IS NOT NULL THEN ' (monto ' || public.crm_formato_monto(v_monto) || ')' ELSE '' END))
+     WHERE id = v_id;
+    INSERT INTO public.dni_resoluciones (lead_id, intento, dni, relacion, resultado, monto_aprobado, operador_id, origen,
+                                         aviso_estado, aviso_actualizado_at)
+    VALUES (v_id, l.dni_intentos, l.dni, l.dni_titular_relacion, 'aprobado', v_monto, NULL, 'sendpulse', 'externo', now())
+    ON CONFLICT (lead_id, intento) DO UPDATE
+      SET resultado = 'aprobado', monto_aprobado = EXCLUDED.monto_aprobado, operador_id = NULL, origen = 'sendpulse',
+          aviso_estado = 'externo', aviso_error = NULL, aviso_actualizado_at = now();
+    INSERT INTO public.historial_cambios (lead_id, usuario_id, campo, valor_anterior, valor_nuevo)
+    VALUES (v_id, NULL, 'Verificación DNI', 'rechazado',
+            'aprobado' || COALESCE(' (' || public.crm_formato_monto(v_monto) || ')', '') || ' — corregido desde SendPulse');
+    RETURN jsonb_build_object('lead_id', v_id, 'estado', 'corregido', 'estado_dni', 'aprobado');
   END IF;
 
   UPDATE public.leads

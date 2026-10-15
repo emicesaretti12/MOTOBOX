@@ -107,6 +107,21 @@ describe('webhook WhatsApp: resultado (sin doble registro)', () => {
     expect(despues.notas).toMatch(/SendPulse informó DNI rechazado, pero el CRM ya tenía aprobado/)
   })
 
+  it('rechazado en el CRM y aprobado después desde SendPulse: se toma como corrección y se asigna', async () => {
+    const db2 = await crearBase({ asignacion: true })
+    await db2.query('UPDATE public.profiles SET recibe_leads = true WHERE id = $1', [U.vendedor2])
+    const l = await crearLead(db2)
+    await como(db2, U.vendedor1, () => rpc(db2, 'dni_resolver', [l.id, 1, 'rechazado', null]))
+    const r = await comoServicio(db2, () => rpc(db2, 'dni_webhook_resultado', ['sp-contacto-1', null, 'aprobado', 800000]))
+    expect(r).toEqual({ lead_id: l.id, estado: 'corregido', estado_dni: 'aprobado' })
+    const despues = await lead(db2, l.id)
+    expect(despues).toMatchObject({ estado_dni: 'aprobado', vendedor_asignado: U.vendedor2 })
+    expect(Number(despues.monto_aprobado)).toBe(800000)
+    const { rows } = await db2.query('SELECT resultado, origen, operador_id FROM public.dni_resoluciones WHERE lead_id = $1', [l.id])
+    expect(rows).toEqual([{ resultado: 'aprobado', origen: 'sendpulse', operador_id: null }])
+    expect(await historial(db2, l.id)).toContainEqual(expect.objectContaining({ campo: 'Verificación DNI', valor_anterior: 'rechazado', valor_nuevo: 'aprobado ($800.000) — corregido desde SendPulse' }))
+  })
+
   it('lead inexistente', async () => {
     expect(await resultado(db, 'no-existe', null, 'aprobado', null)).toEqual({ estado: 'no_encontrado' })
     await expect(resultado(db, 'sp', null, 'tal vez', null)).rejects.toThrow('RESULTADO_INVALIDO')

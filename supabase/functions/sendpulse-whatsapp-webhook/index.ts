@@ -1,15 +1,16 @@
-// Supabase Edge Function: sendpulse-whatsapp-webhook (v4)
+// Supabase Edge Function: sendpulse-whatsapp-webhook (v5 = v4 + resultado sin doble registro)
 // Recibe eventos de los bots de SendPulse (WhatsApp e Instagram) para el flujo de calificación.
 // Función separada: NO reemplaza a sendpulse-lead-webhook (Instagram viejo).
 // Autenticación: header x-webhook-secret contra SENDPULSE_WEBHOOK_SECRET.
 //
 // accion:
 //   lead_calificado | dni_recibido | financia | contado -> crea/actualiza lead (forma de pago, DNI, anticipo, modelo, usada)
-//   resultado                                         -> guarda aprobado | rechazado
+//   resultado                                         -> guarda aprobado | rechazado sin pisar al CRM (resultado.ts)
 //   derivar | asesor                                  -> el cliente pidió hablar con una persona (prioridad alta)
 //   baja                                              -> el cliente dijo que no le interesa
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { registrarResultado } from './resultado.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -126,19 +127,14 @@ Deno.serve(async (req) => {
       if (!['aprobado', 'rechazado'].includes(resultado)) {
         return json({ error: 'resultado debe ser aprobado o rechazado' }, 400)
       }
-      const lead = await buscarLead()
-      if (!lead) return json({ error: 'Lead no encontrado' }, 404)
       const montoTxt = pick(body, ['monto_aprobado', 'monto'])
       const monto = montoTxt ? Number(soloDigitos(montoTxt)) || null : null
-      const { error } = await db.from('leads').update({
-        estado_dni: resultado,
-        monto_aprobado: monto,
-        prioridad: resultado === 'aprobado' ? 'alta' : undefined,
-        dni_actualizado_at: new Date().toISOString(),
-        notas: agregarNota(lead.notas, `Bot: DNI ${resultado}${monto ? ` (monto $${monto})` : ''}`),
-      }).eq('id', lead.id)
-      if (error) return json({ error: error.message }, 400)
-      return json({ message: 'Resultado guardado', lead_id: lead.id, estado_dni: resultado }, 200)
+      // v5: si el CRM ya registró este resultado no se duplica ni se borra el monto (ver resultado.ts).
+      const r = await registrarResultado({
+        rpc: async (funcion, args) => await db.rpc(funcion, args),
+        marcarPrioridadAlta: async (id) => await db.from('leads').update({ prioridad: 'alta' }).eq('id', id),
+      }, { contactId, telefono, resultado, monto })
+      return json(r.body, r.status)
     }
 
     // ---------- derivar a una persona / baja ----------
@@ -220,7 +216,7 @@ Deno.serve(async (req) => {
       campos.notas = agregarNota(lead.notas, nota + (lead.estado === 'perdido' ? ' — REACTIVADO (estaba perdido)' : ''))
       const { error } = await db.from('leads').update(campos).eq('id', lead.id)
       if (error) {
-        console.error('Error actualizando lead', error)
+        console.error('Error actualizando lead', error.code)
         return json({ error: error.message }, 400)
       }
       return json({ message: 'Lead existente actualizado', lead_id: lead.id, is_new: false, alerta_dni: alertaDni }, 200)
@@ -236,12 +232,12 @@ Deno.serve(async (req) => {
       notas: `Nuevo contacto vía ${origen} (bot SendPulse)\n[${ahoraAR()}] ${nota}`,
     }).select('id').single()
     if (error) {
-      console.error('Error creando lead', error)
+      console.error('Error creando lead', error.code)
       return json({ error: error.message }, 400)
     }
     return json({ message: 'Lead creado', lead_id: creado.id, is_new: true, alerta_dni: alertaDni }, 200)
   } catch (err) {
-    console.error('Error inesperado', err)
+    console.error('Error inesperado', err instanceof Error ? err.name : 'desconocido')
     return json({ error: 'Error interno del servidor' }, 500)
   }
 })
