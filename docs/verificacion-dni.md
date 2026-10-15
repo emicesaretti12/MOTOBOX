@@ -1,7 +1,27 @@
 # Verificación de DNI, asignación y métricas — guía de despliegue
 
-Todo esto está en la rama `claude/wonderful-johnson-6kn9m5`. **Nada está aplicado ni desplegado en producción.**
-Cada paso de despliegue necesita OK explícito. Todo lo nuevo arranca **apagado**.
+Todo esto está en la rama `claude/wonderful-johnson-6kn9m5`. Todo lo nuevo arranca **apagado**.
+
+## Estado en producción (15/10/2026)
+
+| Pieza | Estado |
+|---|---|
+| Backup `backup_20261016` (todas las tablas de `public`, con RLS) | Hecho. 857 leads, 7034 filas de historial |
+| `008` cola, partes 1, 2a y 2b (tablas, interruptores, cola, reservas, avisos, `dni_webhook_recibido`, permisos) | Aplicada |
+| `008` parte 3: `dni_soltar`, `dni_resolver`, `dni_webhook_resultado` | **Pendiente**: la herramienta de Supabase pide confirmación porque contienen `DELETE` (solo de reservas en `dni_tomas`). Aplicar `supabase/migrations/008_cola_verificacion_dni.sql` completo desde el SQL Editor es equivalente |
+| `009` asignación por turnos | Aplicada. **Prendida** (`asignacion_automatica_activa = true`) |
+| `011` métricas | Aplicada. Los eventos de DNI se cuentan desde el 15/10 |
+| `010` entrada de leads | No aplicada (etapa 4, necesita OK aparte) |
+| `dni-resolver` | Desplegada (versión 1, verifica JWT) |
+| `sendpulse-whatsapp-webhook` | Sigue la **v4**. La v5 (v4 + `resultado` sin doble registro) se despliega después de la parte 3 |
+| Secrets de SendPulse | **Pendiente**: cargarlos en Supabase > Edge Functions > Secrets |
+| Vendedor 1 y Vendedor 2 | `verifica_dni = true` y `recibe_leads = true` |
+| `cola_dni_activa`, `aviso_sendpulse_activo` | Apagados hasta completar la parte 3 y los secrets |
+
+Las migraciones en producción quedaron registradas como `cola_verificacion_dni_1_tablas`, `cola_verificacion_dni_2a_cola`,
+`cola_verificacion_dni_2b_webhook_y_seguridad`, `asignacion_round_robin` y `metricas_dni`. El contenido es el de los archivos
+`008`, `009` y `011`: las funciones se compararon por huella (md5) contra el repo. Las únicas diferencias son algunos
+comentarios internos y que las políticas y triggers se crearon sin el `DROP … IF EXISTS` previo, porque no existían.
 
 ```
 Cliente (WhatsApp) ─► bot SendPulse ─► sendpulse-whatsapp-webhook ─► lead con estado_dni = pendiente
@@ -21,7 +41,7 @@ Cliente (WhatsApp) ─► bot SendPulse ─► sendpulse-whatsapp-webhook ─►
 | Etapa | Base de datos | Funciones | Pantallas |
 |---|---|---|---|
 | 0 | `007` documenta lo que ya está en producción (no cambia nada) | Código actual de producción copiado al repo | — |
-| 1 Cola | `008`: `profiles.verifica_dni`, `crm_config`, `dni_resoluciones`, `dni_tomas` y funciones | `dni-resolver` (nueva). `sendpulse-whatsapp-webhook` v3 (**requiere OK**) | `/verificacion` |
+| 1 Cola | `007b` documenta la migración paralela de forma de pago. `008`: `profiles.verifica_dni`, `crm_config`, `dni_resoluciones`, `dni_tomas` y funciones | `dni-resolver` (nueva). `sendpulse-whatsapp-webhook` v5 = la v4 de producción con `resultado` sin doble registro (`resultado.ts`) | `/verificacion` |
 | 2 Ficha y listado | — | — | Tarjeta "Verificación de crédito" en la ficha, origen "WhatsApp", filtro y badge de DNI en Leads |
 | 3 Asignación | `009`: `profiles.recibe_leads`, `asignaciones_lead` y trigger por turnos | — | Bloque "DNI aprobado — para contactar" arriba en Dashboard y Leads |
 | 4 Entrada (propuesta) | `010`: índice por teléfono, emails de relleno, `leads_duplicados`, reingreso de perdidos | Instagram v8 en `index.v8.ts` (**requiere OK**, `index.ts` sigue siendo la v7) | Bloque "Volvieron a escribir" |
@@ -72,7 +92,7 @@ Están confirmados contra un cliente de terceros; falta validarlos en la documen
 3. **Secrets** de la tabla de arriba y **desplegar `dni-resolver`** (con verificación de JWT, la opción por defecto).
 4. **Frontend** (Vercel). Con todo apagado, lo único nuevo visible es el filtro de DNI, la tarjeta de crédito y el origen con etiqueta en la ficha.
 5. **Scripts** `supabase/scripts/habilitar_verificadores.sql` y `habilitar_rotacion.sql`: simulación → OK → aplicar.
-6. **Webhook WhatsApp v3.** Si no se aprueba, hay que sacar la llamada al webhook de los flujos "DNI aprobado" y "DNI rechazado" **antes** del paso 8.
+6. **Webhook WhatsApp v5** (`index.ts` + `resultado.ts`, sin verificación de JWT, igual que la v4). Requiere que exista `dni_webhook_resultado` (parte 3 de `008`).
 7. **Prender** `cola_dni_activa` y `asignacion_automatica_activa`.
 8. **Piloto:** prender `aviso_sendpulse_activo` y hacer la prueba de abajo.
 9. **Migración 011** (métricas). Los eventos de DNI se cuentan desde acá.
@@ -115,7 +135,7 @@ Con un WhatsApp que **no** esté cargado como lead:
    UPDATE public.crm_config SET valor = 'false', updated_at = now()
     WHERE clave IN ('cola_dni_activa', 'aviso_sendpulse_activo', 'asignacion_automatica_activa', 'reingreso_perdidos_activo');
    ```
-2. **Webhooks:** volver a desplegar la versión anterior: WhatsApp v2 (`git show 46c01de:supabase/functions/sendpulse-whatsapp-webhook/index.ts`) e Instagram v7 (`index.ts` de esta rama).
+2. **Webhooks:** volver a desplegar la versión anterior: WhatsApp v4 (`git show ced334e:supabase/functions/sendpulse-whatsapp-webhook/index.ts`) e Instagram v7 (`index.ts` de esta rama).
 3. **Frontend:** *Instant Rollback* en Vercel.
 4. **`dni-resolver`:** borrarla desde el panel de Supabase.
 5. **Scripts:** sección "PARA DESHACER" de cada uno.
@@ -136,7 +156,7 @@ npm test
 ```
 
 - `tests/sql/`: cola, permisos, reservas, resolución, webhook idempotente, asignación, entrada de leads, métricas y vuelta atrás. Corren sobre una copia del esquema de producción, con PGlite (Postgres en memoria).
-- `tests/unit/`: cliente SendPulse, `dni-resolver`, webhooks de WhatsApp v3 e Instagram v8, y helpers de las pantallas.
+- `tests/unit/`: cliente SendPulse, `dni-resolver`, `resultado.ts` del webhook de WhatsApp v5, webhook de Instagram v8 y helpers de las pantallas.
 - `tests/integracion/`: circuito completo webhook → cola → resolver → SendPulse simulado → webhook.
 
 Limitación: PGlite tiene una sola conexión, así que la concurrencia real (dos operadores en el mismo milisegundo) la garantiza el bloqueo de fila de Postgres (`SELECT … FOR UPDATE` y el lock de la asignación), no un test.
