@@ -7,7 +7,7 @@
 // El resultado se guarda ANTES de llamar a SendPulse: si SendPulse falla, el resultado no se pierde
 // y la resolución queda como "fallido" para que el operador la reintente o avise a mano.
 
-import { sanitizarError, type ClienteSendPulse } from './sendpulse.ts'
+import { sanitizarError, type ClienteSendPulse, type CanalSendPulse } from './sendpulse.ts'
 
 type ErrorBase = { message: string; code?: string } | null
 type RespuestaRpc = { data: any; error: ErrorBase }
@@ -20,7 +20,10 @@ export interface Dependencias {
   // Llama a una función SQL con la clave de servicio (solo para registrar el aviso).
   rpcServicio: (funcion: string, args: Record<string, unknown>) => Promise<RespuestaRpc>
   sendpulse: ClienteSendPulse | null
-  flujos: { aprobado?: string; rechazado?: string }
+  // Flujos de WhatsApp (por defecto) y, opcionalmente, los del bot de Instagram.
+  flujos: { aprobado?: string; rechazado?: string; instagram?: { aprobado?: string; rechazado?: string } }
+  // Canal del lead de una resolución (según leads.origen). Sin esto, o si falla, se usa WhatsApp.
+  canalDeResolucion?: (resolucionId: string) => Promise<CanalSendPulse>
   log?: Pick<Console, 'error' | 'warn'>
 }
 
@@ -70,10 +73,37 @@ async function avisar(
   contactId: string,
   log: Pick<Console, 'error' | 'warn'>
 ): Promise<{ estado: 'enviado' | 'fallido'; error?: string }> {
-  const flowId = deps.flujos[resultado]
-  const envio = !deps.sendpulse || !flowId
-    ? { ok: false as const, intentos: 0, error: 'Falta configurar SendPulse (credenciales, URL o ID del flujo)' }
-    : await deps.sendpulse.ejecutarFlujo(contactId, flowId)
+  let canal: CanalSendPulse = 'whatsapp'
+  if (deps.canalDeResolucion) {
+    try {
+      canal = await deps.canalDeResolucion(resolucionId)
+    } catch {
+      log.warn('No se pudo determinar el canal del lead; se usa WhatsApp')
+    }
+  }
+  const flujoDe = (c: CanalSendPulse) => (c === 'instagram' ? deps.flujos.instagram?.[resultado] : deps.flujos[resultado])
+  const enviarPor = (c: CanalSendPulse, flowId: string) =>
+    c === 'instagram'
+      ? deps.sendpulse!.ejecutarFlujo(contactId, flowId, 'instagram')
+      : deps.sendpulse!.ejecutarFlujo(contactId, flowId)
+
+  const flowId = flujoDe(canal)
+  let envio = !deps.sendpulse || !flowId
+    ? { ok: false as const, intentos: 0, error: `Falta configurar SendPulse (credenciales, URL o ID del flujo${canal === 'instagram' ? ' de Instagram' : ''})` }
+    : await enviarPor(canal, flowId)
+
+  // El contacto guardado puede ser del otro bot (p. ej. un lead que entró por Instagram y después
+  // escribió por WhatsApp con el mismo teléfono). Si SendPulse lo rechaza, se prueba por el otro canal.
+  if (!envio.ok && deps.sendpulse && deps.canalDeResolucion) {
+    const otro: CanalSendPulse = canal === 'instagram' ? 'whatsapp' : 'instagram'
+    const otroFlujo = flujoDe(otro)
+    if (otroFlujo) {
+      const segundo = await enviarPor(otro, otroFlujo)
+      envio = segundo.ok
+        ? { ok: true as const, intentos: envio.intentos + segundo.intentos }
+        : { ...envio, intentos: envio.intentos + segundo.intentos }
+    }
+  }
 
   const { error } = await deps.rpcServicio('dni_registrar_aviso', {
     p_resolucion_id: resolucionId,

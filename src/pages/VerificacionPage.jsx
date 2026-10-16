@@ -7,7 +7,7 @@ import { useCrmConfig } from '../hooks/useCrmConfig'
 import { getWhatsAppLink } from '../lib/utils'
 import {
   etiquetaRelacion, segundosDesde, formatEspera, parseMonto, formatMonto, mensajeMotivo,
-  motivoDeErrorRpc, datosDeErrorFuncion, mensajeResultado, AVISO_LABELS, ESTADO_DNI_LABELS,
+  motivoDeErrorRpc, datosDeErrorFuncion, mensajeResultado, AVISO_LABELS, ESTADO_DNI_LABELS, ORIGEN_LABELS,
 } from '../lib/verificacion'
 import { Copy, Check, X, RefreshCw, MessageCircle, Clock, ShieldCheck, BellOff } from 'lucide-react'
 
@@ -33,6 +33,7 @@ export default function VerificacionPage() {
   const esCelular = useEsCelular()
   const [cola, setCola] = useState([])
   const [avisos, setAvisos] = useState([])
+  const [resueltos, setResueltos] = useState([])
   const [cargando, setCargando] = useState(true)
   const [errorCola, setErrorCola] = useState(null)
   const [ahora, setAhora] = useState(Date.now())
@@ -42,13 +43,19 @@ export default function VerificacionPage() {
   const [ocupado, setOcupado] = useState(null)
 
   const cargar = useCallback(async () => {
-    const [c, a] = await Promise.all([supabase.rpc('dni_cola_listar'), supabase.rpc('dni_avisos_pendientes')])
+    const [c, a, r] = await Promise.all([
+      supabase.rpc('dni_cola_listar'),
+      supabase.rpc('dni_avisos_pendientes'),
+      supabase.rpc('dni_resueltos_hoy'),
+    ])
     if (c.error) {
       setErrorCola(motivoDeErrorRpc(c.error) || 'ERROR')
     } else {
       setErrorCola(null)
       setCola(c.data || [])
       setAvisos(a.error ? [] : a.data || [])
+      // Si la función todavía no existe en la base, la sección simplemente no se muestra.
+      setResueltos(r.error ? [] : r.data || [])
     }
     setCargando(false)
   }, [])
@@ -339,6 +346,30 @@ export default function VerificacionPage() {
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {resueltos.length > 0 && (
+        <div className="card">
+          <div className="card-header"><h3>Resueltos hoy ({resueltos.length})</h3></div>
+          <div className="card-body avisos-lista">
+            {resueltos.map(r => (
+              <div key={r.resolucion_id} className="aviso-item">
+                <div>
+                  <div className="table-cell-primary">
+                    {isAdmin ? <a href={`/leads/${r.lead_id}`} onClick={e => { e.preventDefault(); navigate(`/leads/${r.lead_id}`) }}>{r.nombre}</a> : r.nombre}
+                    {' '}<span className={`badge badge-dni-${r.resultado}`}>{ESTADO_DNI_LABELS[r.resultado]}</span>
+                    {r.monto_aprobado != null && <span className="aviso-monto"> {formatMonto(r.monto_aprobado)}</span>}
+                  </div>
+                  <div className="aviso-detalle">
+                    {ORIGEN_LABELS[r.origen] || r.origen || 'Sin canal'} · intento #{r.intento}
+                    {' · '}{AVISO_LABELS[r.aviso_estado] || r.aviso_estado}
+                    {' · '}hace {formatEspera(segundosDesde(r.resuelto_at, ahora))}{r.operador_nombre ? ` por ${r.operador_nombre}` : ''}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -1,6 +1,6 @@
-// Cliente mínimo de la API de chatbots de WhatsApp de SendPulse.
+// Cliente mínimo de la API de chatbots de SendPulse (WhatsApp e Instagram).
 //   Token:          POST {SENDPULSE_API_URL}/oauth/access_token  (client_credentials, dura ~1 h)
-//   Ejecutar flujo: POST {SENDPULSE_API_URL}/whatsapp/flows/run  { contact_id, flow_id }
+//   Ejecutar flujo: POST {SENDPULSE_API_URL}/{canal}/flows/run  { contact_id, flow_id }  (canal: whatsapp | instagram)
 // Sin dependencias de Deno para poder testearlo con Vitest.
 
 export interface ConfigSendPulse {
@@ -16,8 +16,10 @@ export type ResultadoAviso =
   | { ok: true; intentos: number }
   | { ok: false; intentos: number; error: string }
 
+export type CanalSendPulse = 'whatsapp' | 'instagram'
+
 export interface ClienteSendPulse {
-  ejecutarFlujo(contactId: string, flowId: string): Promise<ResultadoAviso>
+  ejecutarFlujo(contactId: string, flowId: string, canal?: CanalSendPulse): Promise<ResultadoAviso>
 }
 
 interface Dependencias {
@@ -101,7 +103,8 @@ export function crearClienteSendPulse(cfg: ConfigSendPulse, deps: Partial<Depend
     return token.valor
   }
 
-  async function ejecutarFlujo(contactId: string, flowId: string): Promise<ResultadoAviso> {
+  async function ejecutarFlujo(contactId: string, flowId: string, canal: CanalSendPulse = 'whatsapp'): Promise<ResultadoAviso> {
+    const ruta = canal === 'instagram' ? 'instagram' : 'whatsapp'
     const maxIntentos = esperas.length + 1
     let intento = 0
     let tokenRenovado = false
@@ -111,7 +114,7 @@ export function crearClienteSendPulse(cfg: ConfigSendPulse, deps: Partial<Depend
       intento++
       try {
         const valor = await obtenerToken()
-        const res = await pedir(`${base}/whatsapp/flows/run`, {
+        const res = await pedir(`${base}/${ruta}/flows/run`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${valor}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ contact_id: contactId, flow_id: flowId }),

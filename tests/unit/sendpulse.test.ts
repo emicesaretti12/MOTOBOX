@@ -88,3 +88,12 @@ describe('cliente SendPulse', () => {
     expect(sanitizarError('x'.repeat(500))).toHaveLength(300)
   })
 })
+
+describe('cliente SendPulse: Instagram', () => {
+  it('usa la ruta de Instagram cuando se pide ese canal', async () => {
+    const { fn, llamadas } = fetchFalso([TOKEN_OK(), respuesta(200, { success: true })])
+    const sp = crearClienteSendPulse(CFG, { fetch: fn, sleep: async () => {} })
+    expect(await sp.ejecutarFlujo('c-ig', 'ig-aprobado', 'instagram')).toEqual({ ok: true, intentos: 1 })
+    expect(llamadas[1].url).toBe('https://api.ejemplo.test/instagram/flows/run')
+  })
+})

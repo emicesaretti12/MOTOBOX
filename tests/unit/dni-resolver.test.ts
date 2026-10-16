@@ -157,3 +157,39 @@ describe('dni-resolver', () => {
     expect(d.sendpulse!.ejecutarFlujo).not.toHaveBeenCalled()
   })
 })
+
+describe('dni-resolver: canal Instagram', () => {
+  it('si el lead vino de Instagram, ejecuta el flujo del bot de Instagram', async () => {
+    const { d } = deps({
+      flujos: { aprobado: 'flujo-aprobado', rechazado: 'flujo-rechazado', instagram: { aprobado: 'ig-aprobado', rechazado: 'ig-rechazado' } },
+      canalDeResolucion: vi.fn(async () => 'instagram' as const),
+    })
+    const res = await handleRequest(pedido(RESOLVER), d)
+    expect(res.status).toBe(200)
+    expect(d.sendpulse!.ejecutarFlujo).toHaveBeenCalledWith('sp-1', 'ig-aprobado', 'instagram')
+  })
+
+  it('si no se puede saber el canal, usa WhatsApp', async () => {
+    const { d } = deps({ canalDeResolucion: vi.fn(async () => { throw new Error('db') }) })
+    const res = await handleRequest(pedido(RESOLVER), d)
+    expect(res.status).toBe(200)
+    expect(d.sendpulse!.ejecutarFlujo).toHaveBeenCalledWith('sp-1', 'flujo-aprobado')
+  })
+})
+
+describe('dni-resolver: contacto de otro canal', () => {
+  it('si falla por el canal del origen, prueba por el otro bot', async () => {
+    const ejecutarFlujo = vi.fn()
+      .mockResolvedValueOnce({ ok: false, intentos: 1, error: 'SendPulse respondió HTTP 422' })
+      .mockResolvedValueOnce({ ok: true, intentos: 1 })
+    const { d } = deps({
+      sendpulse: { ejecutarFlujo },
+      flujos: { aprobado: 'flujo-aprobado', rechazado: 'flujo-rechazado', instagram: { aprobado: 'ig-aprobado', rechazado: 'ig-rechazado' } },
+      canalDeResolucion: vi.fn(async () => 'instagram' as const),
+    })
+    const body = await (await handleRequest(pedido(RESOLVER), d)).json()
+    expect(ejecutarFlujo).toHaveBeenNthCalledWith(1, 'sp-1', 'ig-aprobado', 'instagram')
+    expect(ejecutarFlujo).toHaveBeenNthCalledWith(2, 'sp-1', 'flujo-aprobado')
+    expect(body.aviso).toEqual({ estado: 'enviado' })
+  })
+})

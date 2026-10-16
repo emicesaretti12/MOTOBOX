@@ -146,8 +146,12 @@ export function mensajeResultado(resultado, aviso) {
 }
 
 export const AVISO_LABELS = {
+  enviado: 'Aviso enviado al cliente',
+  manual: 'Avisado a mano',
   pendiente: 'Aviso en curso o sin confirmar',
-  fallido: 'No se pudo avisar por WhatsApp',
+  fallido: 'No se pudo avisar al cliente',
   sin_contacto: 'Sin contacto de SendPulse: avisar a mano',
   desactivado: 'Aviso automático apagado: avisar a mano',
 }
+
+export const ORIGEN_LABELS = { whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook' }
