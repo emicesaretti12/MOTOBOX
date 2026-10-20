@@ -16,6 +16,7 @@ import {
   Calendar,
   Activity,
   Package,
+  Gauge,
   DollarSign,
   Briefcase,
   ShieldCheck,
@@ -39,6 +40,7 @@ export default function Layout() {
     if (path === '/usuarios') return 'Gestión de Usuarios'
         if (path === '/perfil') return 'Mi Perfil'
     if (path === '/inventario') return 'Gestión de Inventario'
+    if (path === '/usados') return 'Usados exclusivos'
     if (path === '/ventas') return 'Gestión de Ventas'
     if (path === '/clientes') return 'Gestión de Clientes'
     if (path === '/web-config') return 'Configurar Web Pública'
@@ -102,6 +104,15 @@ export default function Layout() {
           >
             <Package size={18} />
             Inventario
+          </NavLink>
+
+          <NavLink
+            to="/usados"
+            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            <Gauge size={18} />
+            Usados exclusivos
           </NavLink>
 
           <NavLink

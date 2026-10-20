@@ -10,6 +10,7 @@ import UsersPage from './pages/UsersPage'
 import VendorMonitorPage from './pages/VendorMonitorPage'
 import ProfilePage from './pages/ProfilePage'
 import InventoryPage from './pages/InventoryPage'
+import UsadosPage from './pages/UsadosPage'
 import SalesPage from './pages/SalesPage'
 import ClientsPage from './pages/ClientsPage'
 import WebSettingsPage from './pages/WebSettingsPage'
@@ -91,6 +92,7 @@ function AppRoutes() {
         <Route path="agenda" element={<AgendaPage />} />
         <Route path="perfil" element={<ProfilePage />} />
         <Route path="inventario" element={<InventoryPage />} />
+        <Route path="usados" element={<UsadosPage />} />
         <Route path="ventas" element={<SalesPage />} />
         <Route path="clientes" element={<ClientsPage />} />
         <Route
