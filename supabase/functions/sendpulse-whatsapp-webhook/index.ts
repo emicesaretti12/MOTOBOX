@@ -1,4 +1,4 @@
-// Supabase Edge Function: sendpulse-whatsapp-webhook (v6 = v5 + precalificación BCRA)
+// Supabase Edge Function: sendpulse-whatsapp-webhook (v7 = v6 + reloj para el seguimiento automático)
 // Recibe eventos de los bots de SendPulse (WhatsApp e Instagram) para el flujo de calificación.
 // Función separada: NO reemplaza a sendpulse-lead-webhook (Instagram viejo).
 // Autenticación: header x-webhook-secret contra SENDPULSE_WEBHOOK_SECRET.
@@ -14,6 +14,9 @@
 //   precalificacion: apto | no_apto | sin_verificar
 //   pedir_otro_dni:  si | no          (no_apto y quedan intentos -> pedir el DNI de un familiar)
 //   intentos_restantes, mensaje_bot
+//
+// v7: cada evento del bot guarda leads.bot_ultimo_evento_at = ahora. Es el reloj de seguimiento-auto
+// (la ventana de 24 h de Meta se cuenta desde el último mensaje del cliente). "baja" no lo actualiza.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { registrarResultado } from './resultado.ts'
@@ -176,6 +179,7 @@ Deno.serve(async (req) => {
       if (lead) {
         const { error } = await db.from('leads').update({
           prioridad: accion === 'derivar' ? 'alta' : 'baja',
+          ...(accion === 'derivar' ? { bot_ultimo_evento_at: new Date().toISOString() } : {}),
           notas: agregarNota(lead.notas, nota),
           sendpulse_contact_id: contactId ?? undefined,
         }).eq('id', lead.id)
@@ -190,6 +194,7 @@ Deno.serve(async (req) => {
         origen,
         estado: 'nuevo',
         prioridad: 'alta',
+        bot_ultimo_evento_at: new Date().toISOString(),
         sendpulse_contact_id: contactId,
         notas: `Nuevo contacto vía ${origen} (bot SendPulse)\n[${ahoraAR()}] ${nota}`,
       }).select('id').single()
@@ -247,6 +252,7 @@ Deno.serve(async (req) => {
         ? 'alta'
         : noApto && !anticipo ? 'baja' : 'media',
       sendpulse_contact_id: contactId ?? undefined,
+      bot_ultimo_evento_at: new Date().toISOString(),
     }
     if (anticipo) campos.anticipo = anticipo
     if (modelo) campos.modelo_interes = modelo
