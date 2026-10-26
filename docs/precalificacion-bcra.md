@@ -6,7 +6,7 @@ Cuando el bot recibe un DNI para financiar, `sendpulse-whatsapp-webhook` (v6) co
 | Resultado | Cuándo | Qué pasa en el CRM | Qué hace el bot |
 |---|---|---|---|
 | `apto` | Sin deudas, o peor situación ≤ `precalif_situacion_maxima` (2) | Entra a la cola de verificación como siempre, con prioridad **alta** | "Pasó la primera revisión, un asesor te escribe" |
-| `no_apto` | Situación 3+, cheques rechazados sin pagar o proceso judicial | **No** entra a la cola. Queda en la nota. Prioridad baja (media si ofreció anticipo o usada) | Pide el DNI de un familiar, hasta `precalif_intentos_max` (3) |
+| `no_apto` | Situación 3+, cheques rechazados sin pagar o proceso judicial | **No** entra a la cola. Queda en la nota. Prioridad baja (media si ofreció anticipo) | Pide el DNI de un familiar, hasta `precalif_intentos_max` (3) |
 | `sin_verificar` | El BCRA no respondió o la función está apagada | Igual que hoy: entra a la cola | "Recibimos tu DNI, un asesor lo revisa" |
 
 No reemplaza a Credicuotas: saca de entrada a los que casi seguro van a ser rechazados.

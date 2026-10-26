@@ -79,7 +79,7 @@ const etiquetaForma: Record<string, string> = {
 const MENSAJES_BOT = {
   apto: '¡Listo! Tu DNI pasó la primera revisión. Un asesor confirma la aprobación y te escribe en breve.',
   no_apto_reintentar: 'Con este DNI no vamos a poder sacar la financiación. Si tenés un familiar (padre, madre, pareja, hermano/a) que pueda ser titular, mandanos su DNI y lo revisamos al instante.',
-  no_apto_final: 'No encontramos una opción de financiación con los DNI que nos pasaste. Si tenés tarjeta de crédito o una moto usada para entregar, escribí "asesor" y te armamos otra propuesta.',
+  no_apto_final: 'No encontramos una opción de financiación con los DNI que nos pasaste. Si tenés tarjeta de crédito, escribí "asesor" y te armamos otra propuesta con tus cuotas.',
   sin_verificar: 'Recibimos tu DNI. Un asesor lo revisa y te escribe en breve.',
 }
 
@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
       dniValido && !noApto ? `DNI ${dniDigitos} (${relacion}) para verificar` : null,
       dniValido && noApto ? `DNI ${dniDigitos} (${relacion}) descartado por precalificación` : null,
       precalif ? notaPrecalificacion(precalif, intento, relacion) : null,
-      noApto && (anticipo || usada) ? 'OFRECER OTRA OPCIÓN: tiene anticipo o usada para entregar' : null,
+      noApto && anticipo ? 'OFRECER OTRA OPCIÓN: ofreció anticipo' : null,
       alertaDni ? `ATENCIÓN: DNI no válido o faltante (${dniRaw ?? 'vacío'}), pedirlo de nuevo` : null,
       anticipo ? `anticipo ${anticipo}` : null,
       modelo ? `modelo ${modelo}` : null,
@@ -242,10 +242,10 @@ Deno.serve(async (req) => {
 
     const campos: Record<string, unknown> = {
       forma_pago: formaPago ?? null,
-      // Un no apto que ofrece anticipo o usada no se descarta: sigue en media para ofrecerle otra opción.
+      // Un no apto que ofrece anticipo no se descarta: sigue en media para ofrecerle otra opción.
       prioridad: formaPago === 'contado' || alertaDni || precalif?.resultado === 'apto'
         ? 'alta'
-        : noApto && !anticipo && !usada ? 'baja' : 'media',
+        : noApto && !anticipo ? 'baja' : 'media',
       sendpulse_contact_id: contactId ?? undefined,
     }
     if (anticipo) campos.anticipo = anticipo
