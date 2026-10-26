@@ -6,6 +6,7 @@
 -- * Supabase Cron cada 15 minutos llama a la función seguimiento-auto, SOLO si seguimiento_activo = 'true'.
 -- * El secreto del cron vive en el Vault; la función lo valida con seguimiento_token_valido (solo service_role).
 --
+-- crm_config.valor es JSONB: los textos van entre comillas dobles ('"hola"').
 -- Arranca APAGADO. Se puede correr más de una vez. Para deshacer: 016_seguimiento_automatico.down.sql
 -- ============================================
 
@@ -41,11 +42,11 @@ INSERT INTO public.crm_config (clave, valor, descripcion) VALUES
   ('seguimiento_hora_desde', '9', 'Hora de Córdoba desde la que se mandan seguimientos'),
   ('seguimiento_hora_hasta', '21', 'Hora de Córdoba hasta la que se mandan seguimientos'),
   ('seguimiento_separacion_horas', '6', 'Horas mínimas entre dos seguimientos al mismo cliente'),
-  ('seguimiento_texto_p1', '', 'Texto del recordatorio a la 1 h (vacío = texto por defecto). Admite {nombre} y {moto}'),
-  ('seguimiento_texto_p2', '', 'Texto del recordatorio antes de las 24 h (vacío = texto por defecto). Admite {nombre} y {moto}'),
-  ('seguimiento_flujo_p3', '', 'ID del flujo de WhatsApp (empieza con plantilla aprobada) para el día 2'),
-  ('seguimiento_flujo_p4', '', 'ID del flujo de WhatsApp (empieza con plantilla aprobada) para el día 5'),
-  ('seguimiento_url', 'https://szgencxcwhhjwonubika.supabase.co/functions/v1/seguimiento-auto', 'URL de la función que llama el cron')
+  ('seguimiento_texto_p1', '""', 'Texto del recordatorio a la 1 h (vacío = texto por defecto). Admite {nombre} y {moto}'),
+  ('seguimiento_texto_p2', '""', 'Texto del recordatorio antes de las 24 h (vacío = texto por defecto). Admite {nombre} y {moto}'),
+  ('seguimiento_flujo_p3', '""', 'ID del flujo de WhatsApp (empieza con plantilla aprobada) para el día 2'),
+  ('seguimiento_flujo_p4', '""', 'ID del flujo de WhatsApp (empieza con plantilla aprobada) para el día 5'),
+  ('seguimiento_url', '"https://szgencxcwhhjwonubika.supabase.co/functions/v1/seguimiento-auto"', 'URL de la función que llama el cron')
 ON CONFLICT (clave) DO NOTHING;
 
 -- Secreto del cron (se genera una sola vez).
@@ -73,11 +74,11 @@ GRANT EXECUTE ON FUNCTION public.seguimiento_token_valido(TEXT) TO service_role;
 SELECT cron.unschedule('seguimiento-auto') WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'seguimiento-auto');
 SELECT cron.schedule('seguimiento-auto', '*/15 * * * *', $cron$
   SELECT net.http_post(
-    url := (SELECT valor FROM public.crm_config WHERE clave = 'seguimiento_url'),
+    url := (SELECT valor #>> '{}' FROM public.crm_config WHERE clave = 'seguimiento_url'),
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'x-cron-secret', (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'seguimiento_cron_token')),
     body := '{}'::jsonb,
     timeout_milliseconds := 30000)
-  WHERE EXISTS (SELECT 1 FROM public.crm_config WHERE clave = 'seguimiento_activo' AND valor = 'true');
+  WHERE EXISTS (SELECT 1 FROM public.crm_config WHERE clave = 'seguimiento_activo' AND valor = 'true'::jsonb);
 $cron$);
