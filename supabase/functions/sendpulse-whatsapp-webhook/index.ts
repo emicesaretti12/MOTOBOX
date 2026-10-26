@@ -1,4 +1,4 @@
-// Supabase Edge Function: sendpulse-whatsapp-webhook (v5 = v4 + resultado sin doble registro)
+// Supabase Edge Function: sendpulse-whatsapp-webhook (v6 = v5 + precalificación BCRA)
 // Recibe eventos de los bots de SendPulse (WhatsApp e Instagram) para el flujo de calificación.
 // Función separada: NO reemplaza a sendpulse-lead-webhook (Instagram viejo).
 // Autenticación: header x-webhook-secret contra SENDPULSE_WEBHOOK_SECRET.
@@ -8,9 +8,16 @@
 //   resultado                                         -> guarda aprobado | rechazado sin pisar al CRM (resultado.ts)
 //   derivar | asesor                                  -> el cliente pidió hablar con una persona (prioridad alta)
 //   baja                                              -> el cliente dijo que no le interesa
+//
+// v6: con crm_config.precalif_bcra_activa = true, cada DNI se consulta en la Central de Deudores del BCRA
+// (precalificacion.ts). La respuesta trae campos planos para que el bot de SendPulse decida qué decir:
+//   precalificacion: apto | no_apto | sin_verificar
+//   pedir_otro_dni:  si | no          (no_apto y quedan intentos -> pedir el DNI de un familiar)
+//   intentos_restantes, mensaje_bot
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { registrarResultado } from './resultado.ts'
+import { precalificar, notaPrecalificacion, type Precalificacion } from './precalificacion.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,6 +74,28 @@ const etiquetaForma: Record<string, string> = {
   cuotas: 'cuotas con DNI',
   anticipo_cuotas: 'anticipo + cuotas',
   contado: 'CONTADO',
+}
+
+const MENSAJES_BOT = {
+  apto: '¡Listo! Tu DNI pasó la primera revisión. Un asesor confirma la aprobación y te escribe en breve.',
+  no_apto_reintentar: 'Con este DNI no vamos a poder sacar la financiación. Si tenés un familiar (padre, madre, pareja, hermano/a) que pueda ser titular, mandanos su DNI y lo revisamos al instante.',
+  no_apto_final: 'No encontramos una opción de financiación con los DNI que nos pasaste. Si tenés tarjeta de crédito o una moto usada para entregar, escribí "asesor" y te armamos otra propuesta.',
+  sin_verificar: 'Recibimos tu DNI. Un asesor lo revisa y te escribe en breve.',
+}
+
+type ConfigPrecalif = { activa: boolean; situacionMaxima: number; intentosMax: number }
+
+async function leerConfigPrecalif(db: ReturnType<typeof createClient>): Promise<ConfigPrecalif> {
+  const apagada = { activa: false, situacionMaxima: 2, intentosMax: 3 }
+  const { data, error } = await db.from('crm_config').select('clave, valor')
+    .in('clave', ['precalif_bcra_activa', 'precalif_situacion_maxima', 'precalif_intentos_max'])
+  if (error || !data) return apagada
+  const v = Object.fromEntries(data.map((r: { clave: string; valor: string }) => [r.clave, String(r.valor)]))
+  return {
+    activa: v.precalif_bcra_activa === 'true',
+    situacionMaxima: Number(v.precalif_situacion_maxima) || 2,
+    intentosMax: Number(v.precalif_intentos_max) || 3,
+  }
 }
 
 Deno.serve(async (req) => {
@@ -183,9 +212,26 @@ Deno.serve(async (req) => {
     // Si financia pero el DNI no es válido, NO se pierde el lead: se guarda con alerta para revisión humana.
     const alertaDni = financia && !dniValido
 
+    const lead = await buscarLead()
+    const intento = (lead?.dni_intentos ?? 0) + (dniValido ? 1 : 0)
+
+    // ---------- precalificación BCRA (v6) ----------
+    let precalif: Precalificacion | null = null
+    let cfgPrecalif: ConfigPrecalif = { activa: false, situacionMaxima: 2, intentosMax: 3 }
+    if (dniValido && financia) {
+      cfgPrecalif = await leerConfigPrecalif(db)
+      if (cfgPrecalif.activa) {
+        precalif = await precalificar(dniDigitos!, { situacionMaxima: cfgPrecalif.situacionMaxima })
+      }
+    }
+    const noApto = precalif?.resultado === 'no_apto'
+
     const partes = [
       `Bot ${origen}: forma de pago ${etiquetaForma[formaPago ?? 'cuotas']}`,
-      dniValido ? `DNI ${dniDigitos} (${relacion}) para verificar` : null,
+      dniValido && !noApto ? `DNI ${dniDigitos} (${relacion}) para verificar` : null,
+      dniValido && noApto ? `DNI ${dniDigitos} (${relacion}) descartado por precalificación` : null,
+      precalif ? notaPrecalificacion(precalif, intento, relacion) : null,
+      noApto && (anticipo || usada) ? 'OFRECER OTRA OPCIÓN: tiene anticipo o usada para entregar' : null,
       alertaDni ? `ATENCIÓN: DNI no válido o faltante (${dniRaw ?? 'vacío'}), pedirlo de nuevo` : null,
       anticipo ? `anticipo ${anticipo}` : null,
       modelo ? `modelo ${modelo}` : null,
@@ -196,22 +242,46 @@ Deno.serve(async (req) => {
 
     const campos: Record<string, unknown> = {
       forma_pago: formaPago ?? null,
-      prioridad: formaPago === 'contado' || alertaDni ? 'alta' : 'media',
+      // Un no apto que ofrece anticipo o usada no se descarta: sigue en media para ofrecerle otra opción.
+      prioridad: formaPago === 'contado' || alertaDni || precalif?.resultado === 'apto'
+        ? 'alta'
+        : noApto && !anticipo && !usada ? 'baja' : 'media',
       sendpulse_contact_id: contactId ?? undefined,
     }
     if (anticipo) campos.anticipo = anticipo
     if (modelo) campos.modelo_interes = modelo
     if (usada) campos.usada_detalle = usada
-    if (dniValido) {
+    // Un DNI no apto NO entra a la cola (no se toca dni / estado_dni): queda solo en la nota.
+    if (dniValido && !noApto) {
       campos.dni = dniDigitos
       campos.estado_dni = 'pendiente'
       campos.dni_titular_relacion = relacion
       campos.dni_actualizado_at = new Date().toISOString()
     }
+    if (precalif) {
+      campos.bcra_resultado = precalif.resultado
+      campos.bcra_situacion = precalif.peorSituacion
+      campos.bcra_consultado_at = new Date().toISOString()
+    }
 
-    const lead = await buscarLead()
+    // Lo que lee el bot de SendPulse para decidir qué responder.
+    const restantes = Math.max(cfgPrecalif.intentosMax - intento, 0)
+    const pedirOtro = noApto && restantes > 0
+    const paraElBot = {
+      precalificacion: precalif?.resultado ?? 'sin_verificar',
+      pedir_otro_dni: pedirOtro ? 'si' : 'no',
+      intentos_restantes: String(restantes),
+      mensaje_bot: !dniValido
+        ? ''
+        : precalif?.resultado === 'apto'
+          ? MENSAJES_BOT.apto
+          : noApto
+            ? (pedirOtro ? MENSAJES_BOT.no_apto_reintentar : MENSAJES_BOT.no_apto_final)
+            : MENSAJES_BOT.sin_verificar,
+    }
+
     if (lead) {
-      if (dniValido) campos.dni_intentos = (lead.dni_intentos ?? 0) + 1
+      if (dniValido) campos.dni_intentos = intento
       if (lead.estado === 'perdido') campos.estado = 'nuevo'
       campos.notas = agregarNota(lead.notas, nota + (lead.estado === 'perdido' ? ' — REACTIVADO (estaba perdido)' : ''))
       const { error } = await db.from('leads').update(campos).eq('id', lead.id)
@@ -219,7 +289,7 @@ Deno.serve(async (req) => {
         console.error('Error actualizando lead', error.code)
         return json({ error: error.message }, 400)
       }
-      return json({ message: 'Lead existente actualizado', lead_id: lead.id, is_new: false, alerta_dni: alertaDni }, 200)
+      return json({ message: 'Lead existente actualizado', lead_id: lead.id, is_new: false, alerta_dni: alertaDni, ...paraElBot }, 200)
     }
 
     const { data: creado, error } = await db.from('leads').insert({
@@ -235,7 +305,7 @@ Deno.serve(async (req) => {
       console.error('Error creando lead', error.code)
       return json({ error: error.message }, 400)
     }
-    return json({ message: 'Lead creado', lead_id: creado.id, is_new: true, alerta_dni: alertaDni }, 200)
+    return json({ message: 'Lead creado', lead_id: creado.id, is_new: true, alerta_dni: alertaDni, ...paraElBot }, 200)
   } catch (err) {
     console.error('Error inesperado', err instanceof Error ? err.name : 'desconocido')
     return json({ error: 'Error interno del servidor' }, 500)
