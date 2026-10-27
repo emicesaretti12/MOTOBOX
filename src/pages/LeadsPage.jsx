@@ -61,7 +61,9 @@ export default function LeadsPage() {
       if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
       const { data, error } = await q
       if (error) throw error
-      setLeads(data || [])
+      // Arriba lo último que pasó: un lead viejo que vuelve a escribirle al bot sube, no queda enterrado por su fecha de alta.
+      const actividad = (l) => Math.max(Date.parse(l.created_at) || 0, Date.parse(l.bot_ultimo_evento_at) || 0)
+      setLeads((data || []).sort((a, b) => actividad(b) - actividad(a)))
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }
