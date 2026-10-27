@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { Plus, Search, X, LayoutGrid, List, Download, Phone, MessageCircle, Trash2, Edit, CheckSquare } from 'lucide-react'
-import { ESTADO_DNI_LABELS } from '../lib/verificacion'
+import { ESTADO_DNI_LABELS, BCRA_LABELS, PRIORIDAD_LABELS, detalleBcra } from '../lib/verificacion'
 import ParaContactar from '../components/ParaContactar'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
@@ -13,6 +13,17 @@ const STATUS_ORDER = ['nuevo', 'contactado', 'en_negociacion', 'venta_cerrada', 
 const EMPTY_LEAD = { nombre: '', telefono: '', email: '', modelo_interes: '', origen: 'presencial', estado: 'nuevo', vendedor_asignado: '', presupuesto_estimado: '', fecha_agenda: '', notas: '' }
 
 function getWaLink(ph) { if (!ph) return null; const c = ph.replace(/\D/g, ''); return 'https://wa.me/' + (c.startsWith('54') ? c : '54' + c) }
+// Etiquetas que van al lado del nombre: prioridad, resultado del Banco Central y estado del DNI.
+function EtiquetasLead({ l }) {
+  return (
+    <>
+      {l.prioridad && l.prioridad !== 'media' && <span className={`badge badge-prioridad-${l.prioridad} badge-dni-mini`}>Prioridad {PRIORIDAD_LABELS[l.prioridad]?.toLowerCase()}</span>}
+      {l.bcra_resultado && <span className={`badge badge-bcra-${l.bcra_resultado} badge-dni-mini`} title={detalleBcra(l)}>{BCRA_LABELS[l.bcra_resultado]}</span>}
+      {l.estado_dni && <span className={`badge badge-dni-${l.estado_dni} badge-dni-mini`}>DNI {ESTADO_DNI_LABELS[l.estado_dni]?.toLowerCase()}</span>}
+    </>
+  )
+}
+
 function fmt$(v) { return v ? '$' + Number(v).toLocaleString('es-AR') : '-' }
 
 export default function LeadsPage() {
@@ -28,6 +39,8 @@ export default function LeadsPage() {
   const [filterOrigen, setFilterOrigen] = useState('')
   const [filterVendedor, setFilterVendedor] = useState('')
   const [filterDni, setFilterDni] = useState('')
+  const [filterPrioridad, setFilterPrioridad] = useState('')
+  const [filterBcra, setFilterBcra] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingLead, setEditingLead] = useState(null)
   const [formData, setFormData] = useState(EMPTY_LEAD)
@@ -75,8 +88,10 @@ export default function LeadsPage() {
     if (filterVendedor && l.vendedor_asignado !== filterVendedor) return false
     if (filterDni === 'sin_dni' && l.estado_dni) return false
     if (filterDni && filterDni !== 'sin_dni' && l.estado_dni !== filterDni) return false
+    if (filterPrioridad && (l.prioridad || 'media') !== filterPrioridad) return false
+    if (filterBcra && l.bcra_resultado !== filterBcra) return false
     return true
-  }), [leads, search, filterEstado, filterOrigen, filterVendedor, filterDni])
+  }), [leads, search, filterEstado, filterOrigen, filterVendedor, filterDni, filterPrioridad, filterBcra])
 
   function openModal(lead) {
     if (lead) {
@@ -218,6 +233,14 @@ export default function LeadsPage() {
           {Object.entries(ESTADO_DNI_LABELS).map(([k, v]) => <option key={k} value={k}>DNI {v.toLowerCase()}</option>)}
           <option value="sin_dni">Sin DNI</option>
         </select>
+        <select className="filter-select" value={filterPrioridad} onChange={e => setFilterPrioridad(e.target.value)}>
+          <option value="">Toda prioridad</option>
+          {Object.entries(PRIORIDAD_LABELS).map(([k, v]) => <option key={k} value={k}>Prioridad {v.toLowerCase()}</option>)}
+        </select>
+        <select className="filter-select" value={filterBcra} onChange={e => setFilterBcra(e.target.value)}>
+          <option value="">Todo BCRA</option>
+          {Object.entries(BCRA_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
         {isAdmin && (
           <select className="filter-select" value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)}>
             <option value="">Todos los vendedores</option>
@@ -274,7 +297,7 @@ export default function LeadsPage() {
                     {isAdmin && <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.includes(l.id)} onChange={() => toggleSelect(l.id)} /></td>}
                     <td className="table-cell-primary" onClick={() => navigate(`/leads/${l.id}`)}>
                       {l.nombre}
-                      {l.estado_dni && <span className={`badge badge-dni-${l.estado_dni} badge-dni-mini`}>DNI {ESTADO_DNI_LABELS[l.estado_dni]?.toLowerCase()}</span>}
+                      <EtiquetasLead l={l} />
                     </td>
                     <td onClick={() => navigate(`/leads/${l.id}`)}>{l.telefono || '-'}</td>
                     <td onClick={() => navigate(`/leads/${l.id}`)}>{l.modelo_interes || '-'}</td>
@@ -314,7 +337,7 @@ export default function LeadsPage() {
                   {items.map(l => (
                     <div key={l.id} className="kanban-card" onClick={() => navigate(`/leads/${l.id}`)}>
                       <div className="kanban-card-name">{l.nombre}</div>
-                      {l.estado_dni && <span className={`badge badge-dni-${l.estado_dni} badge-dni-mini`}>DNI {ESTADO_DNI_LABELS[l.estado_dni]?.toLowerCase()}</span>}
+                      <EtiquetasLead l={l} />
                       {l.modelo_interes && <div className="kanban-card-model">{l.modelo_interes}</div>}
                       {l.telefono && <div className="kanban-card-meta"><Phone size={11} /> {l.telefono}</div>}
                       {l.fecha_agenda && <div className="kanban-card-meta">📅 {new Date(l.fecha_agenda).toLocaleDateString('es-AR')}</div>}

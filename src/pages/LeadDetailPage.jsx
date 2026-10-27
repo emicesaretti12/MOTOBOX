@@ -219,6 +219,7 @@ export default function LeadDetailPage() {
             <div className="detail-row"><span className="detail-label">Presupuesto</span><span className="detail-value">{fmt$(lead.presupuesto_estimado)}</span></div>
             <div className="detail-row"><span className="detail-label">Vendedor</span><span className="detail-value">{lead.vendedor?.full_name || 'Sin asignar'}</span></div>
             <div className="detail-row"><span className="detail-label">Estado</span><span className="detail-value"><span className={`badge badge-${lead.estado}`}>{STATUS_LABELS[lead.estado]}</span></span></div>
+            <div className="detail-row"><span className="detail-label">Prioridad</span><span className="detail-value"><span className={`badge badge-prioridad-${lead.prioridad || 'media'}`}>{{ alta: 'Alta', media: 'Media', baja: 'Baja' }[lead.prioridad] || 'Media'}</span></span></div>
             <div className="detail-row"><span className="detail-label">Cita Agendada</span><span className="detail-value">{lead.fecha_agenda ? fmtDate(lead.fecha_agenda) : 'Sin agendar'}</span></div>
             <div className="detail-row"><span className="detail-label">Notas</span><span className="detail-value">{lead.notas || '-'}</span></div>
             <div className="detail-row"><span className="detail-label">Creado</span><span className="detail-value">{fmtDate(lead.created_at)}</span></div>

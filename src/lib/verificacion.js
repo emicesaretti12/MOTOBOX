@@ -8,6 +8,23 @@ export const ESTADO_DNI_LABELS = {
   rechazado: 'Rechazado',
 }
 
+// Precalificación automática contra el Banco Central (la carga el bot de SendPulse).
+export const BCRA_LABELS = {
+  apto: 'BCRA apto',
+  no_apto: 'BCRA no apto',
+  sin_verificar: 'BCRA sin verificar',
+}
+
+export const PRIORIDAD_LABELS = { alta: 'Alta', media: 'Media', baja: 'Baja' }
+
+// Texto corto para mostrar el resultado del BCRA: "BCRA apto · sin deudas", "BCRA no apto · situación 5".
+export function detalleBcra(lead) {
+  if (!lead?.bcra_resultado) return null
+  const base = BCRA_LABELS[lead.bcra_resultado] || lead.bcra_resultado
+  if (lead.bcra_resultado === 'sin_verificar') return base
+  return lead.bcra_situacion ? `${base} · situación ${lead.bcra_situacion}` : `${base} · sin deudas`
+}
+
 const RELACION_LABELS = { titular: 'Titular', familiar: 'Familiar' }
 
 export function etiquetaRelacion(relacion) {

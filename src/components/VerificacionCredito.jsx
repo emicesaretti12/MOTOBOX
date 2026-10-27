@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
-import { ESTADO_DNI_LABELS, etiquetaRelacion, formatMonto, enmascararDni } from '../lib/verificacion'
+import { ESTADO_DNI_LABELS, BCRA_LABELS, etiquetaRelacion, formatMonto, enmascararDni, detalleBcra } from '../lib/verificacion'
 import { Copy, ShieldCheck } from 'lucide-react'
 
 function fmtFecha(d) {
@@ -9,7 +9,7 @@ function fmtFecha(d) {
 }
 
 // Tarjeta de la ficha del lead con los datos de verificación de DNI.
-// No se muestra en los leads que nunca mandaron un DNI.
+// No se muestra en los leads que nunca mandaron un DNI (ni pasaron por el Banco Central).
 export default function VerificacionCredito({ lead }) {
   const { addToast } = useToast()
   const [resoluciones, setResoluciones] = useState([])
@@ -26,7 +26,7 @@ export default function VerificacionCredito({ lead }) {
     return () => { activo = false }
   }, [lead?.id, lead?.dni, lead?.estado_dni, lead?.dni_intentos])
 
-  if (!lead || (!lead.dni && !lead.estado_dni)) return null
+  if (!lead || (!lead.dni && !lead.estado_dni && !lead.bcra_resultado)) return null
 
   async function copiar() {
     try {
@@ -55,6 +55,15 @@ export default function VerificacionCredito({ lead }) {
             ) : '-'}
           </span>
         </div>
+        {lead.bcra_resultado && (
+          <div className="detail-row">
+            <span className="detail-label">Banco Central</span>
+            <span className="detail-value">
+              <span className={`badge badge-bcra-${lead.bcra_resultado}`}>{BCRA_LABELS[lead.bcra_resultado]}</span>
+              {' '}<span className="aviso-detalle">{[detalleBcra(lead).split(' · ')[1], fmtFecha(lead.bcra_consultado_at)].filter(Boolean).join(' · ')}</span>
+            </span>
+          </div>
+        )}
         <div className="detail-row"><span className="detail-label">Relación</span><span className="detail-value">{etiquetaRelacion(lead.dni_titular_relacion)}</span></div>
         <div className="detail-row"><span className="detail-label">Intentos</span><span className="detail-value">{lead.dni_intentos ?? 0}</span></div>
         <div className="detail-row"><span className="detail-label">Monto aprobado</span><span className="detail-value">{formatMonto(lead.monto_aprobado)}</span></div>
