@@ -8,6 +8,7 @@ import { getWhatsAppLink } from '../lib/utils'
 import {
   etiquetaRelacion, segundosDesde, formatEspera, parseMonto, formatMonto, mensajeMotivo,
   motivoDeErrorRpc, datosDeErrorFuncion, mensajeResultado, AVISO_LABELS, ESTADO_DNI_LABELS, ORIGEN_LABELS,
+  BCRA_LABELS, detalleBcra,
 } from '../lib/verificacion'
 import { Copy, Check, X, RefreshCw, MessageCircle, Clock, ShieldCheck, BellOff } from 'lucide-react'
 
@@ -52,7 +53,14 @@ export default function VerificacionPage() {
       setErrorCola(motivoDeErrorRpc(c.error) || 'ERROR')
     } else {
       setErrorCola(null)
-      setCola(c.data || [])
+      // El resultado del Banco Central vive en el lead: se suma a cada fila de la cola.
+      const items = c.data || []
+      const ids = items.map(i => i.lead_id)
+      const { data: bcra } = ids.length
+        ? await supabase.from('leads').select('id, bcra_resultado, bcra_situacion').in('id', ids)
+        : { data: [] }
+      const porId = Object.fromEntries((bcra || []).map(b => [b.id, b]))
+      setCola(items.map(i => ({ ...i, ...(porId[i.lead_id] ? { bcra_resultado: porId[i.lead_id].bcra_resultado, bcra_situacion: porId[i.lead_id].bcra_situacion } : {}) })))
       setAvisos(a.error ? [] : a.data || [])
       // Si la función todavía no existe en la base, la sección simplemente no se muestra.
       setResueltos(r.error ? [] : r.data || [])
@@ -181,6 +189,11 @@ export default function VerificacionPage() {
   const alertaSeg = config.alertaEsperaMinutos * 60
   const demorados = cola.filter(i => segundosDesde(i.esperando_desde, ahora) >= alertaSeg).length
 
+  function renderBcra(item) {
+    if (!item.bcra_resultado) return <span className="aviso-detalle">-</span>
+    return <span className={`badge badge-bcra-${item.bcra_resultado}`} title={detalleBcra(item)}>{BCRA_LABELS[item.bcra_resultado]}{item.bcra_situacion ? ` (sit. ${item.bcra_situacion})` : ''}</span>
+  }
+
   function renderAcciones(item) {
     if (item.tomado_por_nombre && !item.tomado_por_mi) {
       return <span className="cola-revision">En revisión por {item.tomado_por_nombre}</span>
@@ -263,6 +276,7 @@ export default function VerificacionPage() {
                   </span>
                   <span><span className="badge badge-empleado">{etiquetaRelacion(item.relacion)}</span> #{item.intento}</span>
                 </div>
+                <div className="cola-tarjeta-fila">{renderBcra(item)}</div>
                 {item.telefono && <div className="aviso-detalle">{item.telefono}</div>}
                 <div className="cola-tarjeta-acciones">
                   {abierto?.leadId === item.lead_id ? renderPanel(item) : renderAcciones(item)}
@@ -277,7 +291,7 @@ export default function VerificacionPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Espera</th><th>Nombre</th><th>Teléfono</th><th>DNI</th><th>Relación</th><th>Intento</th><th>Acciones</th>
+                  <th>Espera</th><th>Nombre</th><th>Teléfono</th><th>DNI</th><th>Banco Central</th><th>Relación</th><th>Intento</th><th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -296,13 +310,14 @@ export default function VerificacionPage() {
                           <button className="btn-icon" title="Copiar DNI" onClick={() => copiar(item.dni)}><Copy size={14} /></button>
                         </span>
                       </td>
+                      <td>{renderBcra(item)}</td>
                       <td><span className="badge badge-empleado">{etiquetaRelacion(item.relacion)}</span></td>
                       <td>#{item.intento}</td>
                       <td>{!esteAbierto && renderAcciones(item)}</td>
                     </tr>,
                     esteAbierto && (
                       <tr key={`${item.lead_id}-panel`} className="cola-panel">
-                        <td colSpan={7}>{renderPanel(item)}</td>
+                        <td colSpan={8}>{renderPanel(item)}</td>
                       </tr>
                     ),
                   ]

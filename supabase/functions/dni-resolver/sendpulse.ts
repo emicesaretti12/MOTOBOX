@@ -20,6 +20,12 @@ export type CanalSendPulse = 'whatsapp' | 'instagram'
 
 export interface ClienteSendPulse {
   ejecutarFlujo(contactId: string, flowId: string, canal?: CanalSendPulse): Promise<ResultadoAviso>
+  // Mensaje de texto libre. Meta solo lo permite dentro de las 24 h desde el último mensaje del cliente.
+  //   POST {canal}/contacts/send
+  //   WhatsApp:  { contact_id, message: { type: 'text', text: { body } } }
+  //   Instagram: { contact_id, messages: [{ type: 'text', message: { text } }] }
+  // Formato tomado de un cliente de terceros: validarlo en el piloto.
+  enviarTexto(contactId: string, texto: string, canal?: CanalSendPulse): Promise<ResultadoAviso>
 }
 
 interface Dependencias {
@@ -103,8 +109,19 @@ export function crearClienteSendPulse(cfg: ConfigSendPulse, deps: Partial<Depend
     return token.valor
   }
 
-  async function ejecutarFlujo(contactId: string, flowId: string, canal: CanalSendPulse = 'whatsapp'): Promise<ResultadoAviso> {
+  function ejecutarFlujo(contactId: string, flowId: string, canal: CanalSendPulse = 'whatsapp'): Promise<ResultadoAviso> {
     const ruta = canal === 'instagram' ? 'instagram' : 'whatsapp'
+    return postConReintentos(`${ruta}/flows/run`, { contact_id: contactId, flow_id: flowId })
+  }
+
+  function enviarTexto(contactId: string, texto: string, canal: CanalSendPulse = 'whatsapp'): Promise<ResultadoAviso> {
+    const body = canal === 'instagram'
+      ? { contact_id: contactId, messages: [{ type: 'text', message: { text: texto } }] }
+      : { contact_id: contactId, message: { type: 'text', text: { body: texto } } }
+    return postConReintentos(`${canal === 'instagram' ? 'instagram' : 'whatsapp'}/contacts/send`, body)
+  }
+
+  async function postConReintentos(ruta: string, cuerpoPedido: Record<string, unknown>): Promise<ResultadoAviso> {
     const maxIntentos = esperas.length + 1
     let intento = 0
     let tokenRenovado = false
@@ -114,10 +131,10 @@ export function crearClienteSendPulse(cfg: ConfigSendPulse, deps: Partial<Depend
       intento++
       try {
         const valor = await obtenerToken()
-        const res = await pedir(`${base}/${ruta}/flows/run`, {
+        const res = await pedir(`${base}/${ruta}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${valor}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contact_id: contactId, flow_id: flowId }),
+          body: JSON.stringify(cuerpoPedido),
         })
         // Token vencido antes de tiempo: se pide uno nuevo una sola vez, sin contar como intento.
         if (res.status === 401 && !tokenRenovado) {
@@ -145,5 +162,5 @@ export function crearClienteSendPulse(cfg: ConfigSendPulse, deps: Partial<Depend
     return { ok: false, intentos: maxIntentos, error: sanitizarError(ultimoError) }
   }
 
-  return { ejecutarFlujo }
+  return { ejecutarFlujo, enviarTexto }
 }

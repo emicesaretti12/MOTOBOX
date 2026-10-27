@@ -96,4 +96,17 @@ describe('cliente SendPulse: Instagram', () => {
     expect(await sp.ejecutarFlujo('c-ig', 'ig-aprobado', 'instagram')).toEqual({ ok: true, intentos: 1 })
     expect(llamadas[1].url).toBe('https://api.ejemplo.test/instagram/flows/run')
   })
+
+describe('enviarTexto', () => {
+  it('manda texto libre con el formato de cada canal', async () => {
+    const { fn, llamadas } = fetchFalso([TOKEN_OK(), respuesta(200, { success: true }), respuesta(200, { success: true })])
+    const sp = crearClienteSendPulse(CFG, { fetch: fn, sleep: async () => {} })
+    expect(await sp.enviarTexto('c-wa', 'hola', 'whatsapp')).toEqual({ ok: true, intentos: 1 })
+    expect(await sp.enviarTexto('c-ig', 'hola', 'instagram')).toEqual({ ok: true, intentos: 1 })
+    expect(llamadas[1].url).toBe('https://api.ejemplo.test/whatsapp/contacts/send')
+    expect(JSON.parse(String(llamadas[1].init.body))).toEqual({ contact_id: 'c-wa', message: { type: 'text', text: { body: 'hola' } } })
+    expect(llamadas[2].url).toBe('https://api.ejemplo.test/instagram/contacts/send')
+    expect(JSON.parse(String(llamadas[2].init.body))).toEqual({ contact_id: 'c-ig', messages: [{ type: 'text', message: { text: 'hola' } }] })
+  })
+})
 })
