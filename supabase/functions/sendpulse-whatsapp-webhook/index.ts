@@ -125,7 +125,9 @@ Deno.serve(async (req) => {
     if (accion === 'asesor') accion = 'derivar'
 
     const contactId = pick(body, ['contact_id', 'sendpulse_contact_id'])
-    const telefono = pick(body, ['telefono', 'phone', 'whatsapp'])
+    // Instagram a veces manda un teléfono vacío o cortado: con menos de 7 dígitos se descarta (la tabla lo exige).
+    const telefonoRaw = pick(body, ['telefono', 'phone', 'whatsapp'])
+    const telefono = telefonoRaw && soloDigitos(telefonoRaw).length >= 7 ? telefonoRaw : undefined
     const origen = normalizarOrigen(pick(body, ['origen', 'canal', 'channel']))
     const nombre = pick(body, ['nombre', 'name', 'full_name'])
     const detalleCanal = pick(body, ['detalle_canal', 'campana', 'campaign'])
@@ -308,7 +310,7 @@ Deno.serve(async (req) => {
       notas: `Nuevo contacto vía ${origen} (bot SendPulse)\n[${ahoraAR()}] ${nota}`,
     }).select('id').single()
     if (error) {
-      console.error('Error creando lead', error.code)
+      console.error('Error creando lead', error.code, error.message)
       return json({ error: error.message }, 400)
     }
     return json({ message: 'Lead creado', lead_id: creado.id, is_new: true, alerta_dni: alertaDni, ...paraElBot }, 200)
