@@ -8,6 +8,8 @@
 //   resultado                                         -> guarda aprobado | rechazado sin pisar al CRM (resultado.ts)
 //   derivar | asesor                                  -> el cliente pidió hablar con una persona (prioridad alta)
 //   baja                                              -> el cliente dijo que no le interesa
+//   visita                                            -> el agente de IA agendó una visita (resumen en "visita")
+//   ia_derivar                                        -> el agente de IA terminó: sin interés = baja, si no = derivar
 //
 // v6: con crm_config.precalif_bcra_activa = true, cada DNI se consulta en la Central de Deudores del BCRA
 // (precalificacion.ts). La respuesta trae campos planos para que el bot de SendPulse decida qué decir:
@@ -21,6 +23,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { registrarResultado } from './resultado.ts'
 import { precalificar, notaPrecalificacion, type Precalificacion } from './precalificacion.ts'
+import { interpretarVisita, esSinInteres } from './agenda.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -123,6 +126,7 @@ Deno.serve(async (req) => {
     if (accion === 'dni_recibido' || accion === 'financia') accion = 'lead_calificado'
     if (accion === 'contado') { accion = 'lead_calificado'; formaForzada = 'contado' }
     if (accion === 'asesor') accion = 'derivar'
+    if (accion === 'ia_derivar') accion = esSinInteres(pick(body, ['motivo', 'mensaje', 'notas']) ?? '') ? 'baja' : 'derivar'
 
     const contactId = pick(body, ['contact_id', 'sendpulse_contact_id'])
     // Instagram a veces manda un teléfono vacío o cortado: con menos de 7 dígitos se descarta (la tabla lo exige).
@@ -169,6 +173,27 @@ Deno.serve(async (req) => {
         marcarPrioridadAlta: async (id) => await db.from('leads').update({ prioridad: 'alta' }).eq('id', id),
       }, { contactId, telefono, resultado, monto })
       return json(r.body, r.status)
+    }
+
+    // ---------- visita agendada por el agente de IA ----------
+    if (accion === 'visita') {
+      const resumen = pick(body, ['visita', 'resumen', 'motivo', 'mensaje']) ?? ''
+      const lead = await buscarLead()
+      if (!lead) return json({ error: 'Lead no encontrado' }, 404)
+      const fecha = interpretarVisita(resumen)
+      const cuando = fecha
+        ? fecha.toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', weekday: 'long', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+        : 'FECHA A CONFIRMAR'
+      const { error } = await db.from('leads').update({
+        estado: 'en_negociacion',
+        prioridad: 'alta',
+        ...(fecha ? { fecha_agenda: fecha.toISOString() } : {}),
+        bot_ultimo_evento_at: new Date().toISOString(),
+        sendpulse_contact_id: contactId ?? undefined,
+        notas: agregarNota(lead.notas, `VISITA AGENDADA por el agente IA (${cuando}): ${resumen}`),
+      }).eq('id', lead.id)
+      if (error) return json({ error: error.message }, 400)
+      return json({ message: 'Visita agendada', lead_id: lead.id, fecha_visita: fecha?.toISOString() ?? '' }, 200)
     }
 
     // ---------- derivar a una persona / baja ----------
