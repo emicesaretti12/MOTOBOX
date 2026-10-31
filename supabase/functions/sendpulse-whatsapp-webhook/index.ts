@@ -132,9 +132,15 @@ Deno.serve(async (req) => {
     let formaForzada: 'contado' | 'tarjeta' | undefined
     if (accion === 'dni_recibido' || accion === 'financia') accion = 'lead_calificado'
     // "contado" del bot también cubre a quien paga con tarjeta: se distingue por lo que dijo el cliente.
+    // Si el agente salió por "contado" pero el cliente dijo cuotas/DNI (o mandó un DNI), manda lo que dijo
+    // el cliente: queda como financia y, si falta el DNI, con alerta para pedirlo.
     if (accion === 'contado') {
       accion = 'lead_calificado'
-      formaForzada = normalizarFormaPago(pick(body, ['forma_pago', 'pago'])) === 'tarjeta' ? 'tarjeta' : 'contado'
+      const dicho = normalizarFormaPago(pick(body, ['forma_pago', 'pago']))
+      const mandoDni = /^\d{7,8}$/.test(soloDigitos(pick(body, ['dni', 'lead_dni']) ?? ''))
+      formaForzada = dicho === 'tarjeta' ? 'tarjeta'
+        : dicho === 'cuotas' || dicho === 'anticipo_cuotas' || mandoDni ? undefined
+        : 'contado'
     }
     if (accion === 'asesor') accion = 'derivar'
     // Lo que vuelve a SendPulse cuando el agente de cierre termina: así un mensaje posterior del cliente
