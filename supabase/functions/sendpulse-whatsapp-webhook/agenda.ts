@@ -10,7 +10,7 @@ const DIAS: Record<string, number> = {
 const OFFSET_AR_MS = 3 * 3600 * 1000
 
 function normalizar(t: string): string {
-  return t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  return t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
 // "Ahora" expresado como fecha/hora de Argentina (campos UTC del objeto = reloj de Córdoba).

@@ -17,6 +17,14 @@ export const BCRA_LABELS = {
 
 export const PRIORIDAD_LABELS = { alta: 'Alta', media: 'Media', baja: 'Baja' }
 
+// Cómo dijo el cliente que va a pagar (lo carga el bot).
+export const FORMA_PAGO_LABELS = {
+  tarjeta: 'Tarjeta',
+  contado: 'Contado',
+  anticipo_cuotas: 'Anticipo + cuotas',
+  cuotas: 'Cuotas con DNI',
+}
+
 // Texto corto para mostrar el resultado del BCRA: "BCRA apto · sin deudas", "BCRA no apto · situación 5".
 export function detalleBcra(lead) {
   if (!lead?.bcra_resultado) return null

@@ -56,7 +56,7 @@ const ESTADOS_FINALES = new Set(['venta_cerrada', 'perdido', 'en_negociacion'])
 
 // Lead con chances reales: dijo contado o anticipo, DNI aprobado o precalificado apto.
 export function esCaliente(l: LeadSeguimiento): boolean {
-  return l.forma_pago === 'contado' || l.forma_pago === 'anticipo_cuotas' ||
+  return l.forma_pago === 'contado' || l.forma_pago === 'tarjeta' || l.forma_pago === 'anticipo_cuotas' ||
     l.estado_dni === 'aprobado' || l.bcra_resultado === 'apto'
 }
 
