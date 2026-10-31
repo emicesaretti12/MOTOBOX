@@ -126,6 +126,9 @@ Deno.serve(async (req) => {
     if (accion === 'dni_recibido' || accion === 'financia') accion = 'lead_calificado'
     if (accion === 'contado') { accion = 'lead_calificado'; formaForzada = 'contado' }
     if (accion === 'asesor') accion = 'derivar'
+    // Lo que vuelve a SendPulse cuando el agente de cierre termina: así un mensaje posterior del cliente
+    // ("gracias", "ok") no lo manda de nuevo al flujo de rechazo.
+    const cierreIA = accion === 'visita' || accion === 'ia_derivar' ? { precalificacion: 'cerrado', estado_dni: 'cerrado' } : {}
     if (accion === 'ia_derivar') accion = esSinInteres(pick(body, ['motivo', 'mensaje', 'notas']) ?? '') ? 'baja' : 'derivar'
 
     const contactId = pick(body, ['contact_id', 'sendpulse_contact_id'])
@@ -193,7 +196,7 @@ Deno.serve(async (req) => {
         notas: agregarNota(lead.notas, `VISITA AGENDADA por el agente IA (${cuando}): ${resumen}`),
       }).eq('id', lead.id)
       if (error) return json({ error: error.message }, 400)
-      return json({ message: 'Visita agendada', lead_id: lead.id, fecha_visita: fecha?.toISOString() ?? '' }, 200)
+      return json({ message: 'Visita agendada', lead_id: lead.id, fecha_visita: fecha?.toISOString() ?? '', ...cierreIA }, 200)
     }
 
     // ---------- derivar a una persona / baja ----------
@@ -211,9 +214,9 @@ Deno.serve(async (req) => {
           sendpulse_contact_id: contactId ?? undefined,
         }).eq('id', lead.id)
         if (error) return json({ error: error.message }, 400)
-        return json({ message: 'Lead actualizado', lead_id: lead.id }, 200)
+        return json({ message: 'Lead actualizado', lead_id: lead.id, ...cierreIA }, 200)
       }
-      if (accion === 'baja') return json({ message: 'Sin lead previo, nada que hacer' }, 200)
+      if (accion === 'baja') return json({ message: 'Sin lead previo, nada que hacer', ...cierreIA }, 200)
       if (!telefono && !contactId) return json({ error: 'Se requiere teléfono o contact_id' }, 400)
       const { data: creado, error } = await db.from('leads').insert({
         nombre: nombre ?? `Sin nombre (${origen})`,
@@ -226,7 +229,7 @@ Deno.serve(async (req) => {
         notas: `Nuevo contacto vía ${origen} (bot SendPulse)\n[${ahoraAR()}] ${nota}`,
       }).select('id').single()
       if (error) return json({ error: error.message }, 400)
-      return json({ message: 'Lead creado', lead_id: creado.id, is_new: true }, 200)
+      return json({ message: 'Lead creado', lead_id: creado.id, is_new: true, ...cierreIA }, 200)
     }
 
     // ---------- lead calificado ----------
