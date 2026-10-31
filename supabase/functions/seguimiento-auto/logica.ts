@@ -5,6 +5,10 @@
 //   * Pasos "texto" (Instagram y WhatsApp): solo dentro de esa ventana.
 //   * Pasos "flujo" (solo WhatsApp): después de 24 h, con un flujo de SendPulse que empieza con una
 //     PLANTILLA aprobada por Meta. Si el flujo no está configurado, el paso no se manda.
+//   * p0_rescate (WhatsApp e Instagram, dentro de las 24 h): al que quedó rechazado (BCRA no apto o
+//     Credicuotas) y no siguió la charla se le vuelve a abrir el flujo "DNI rechazado", que lleva al
+//     agente de IA de cierre (tarjeta, anticipo, familiar, visita). Es el único paso que se manda a
+//     leads en prioridad baja: justamente son los rechazados.
 // Instagram no permite mensajes automáticos después de 24 h.
 
 export type Canal = 'instagram' | 'whatsapp'
@@ -21,6 +25,7 @@ export interface LeadSeguimiento {
   modelo_interes: string | null
   sendpulse_contact_id: string | null
   bot_ultimo_evento_at: string | null
+  notas?: string | null
 }
 
 export interface EnvioPrevio { paso: string; created_at: string }
@@ -29,7 +34,8 @@ export interface ConfigSeguimiento {
   horaDesde: number // hora de Córdoba desde la que se puede mandar (incluida)
   horaHasta: number // hasta (excluida)
   textos: Record<string, string>
-  flujos: Record<string, string | undefined> // paso -> flow_id de WhatsApp (plantilla)
+  // paso -> flow_id. Para p0_rescate va por canal: p0_rescate_whatsapp / p0_rescate_instagram.
+  flujos: Record<string, string | undefined>
   separacionMinHoras: number
 }
 
@@ -54,7 +60,23 @@ export function esCaliente(l: LeadSeguimiento): boolean {
     l.estado_dni === 'aprobado' || l.bcra_resultado === 'apto'
 }
 
+// Rechazado por el BCRA o por Credicuotas.
+export function esRechazado(l: LeadSeguimiento): boolean {
+  return l.bcra_resultado === 'no_apto' || l.estado_dni === 'rechazado'
+}
+
+// Ya habló con el agente de cierre, pidió una persona, dijo que no le interesa o ya se lo rescató.
+const YA_ATENDIDO = /agente IA|pidió hablar con un asesor|no le interesa|Seguimiento automático: rescate/i
+export function yaAtendido(l: LeadSeguimiento): boolean {
+  return YA_ATENDIDO.test(l.notas ?? '')
+}
+
 export const PASOS: Paso[] = [
+  {
+    // Rechazado que no siguió: se le reabre el flujo de rechazo con el agente de cierre.
+    clave: 'p0_rescate', desdeHoras: 3, hastaHoras: 23, canales: ['instagram', 'whatsapp'], tipo: 'flujo',
+    aplica: (l) => esRechazado(l) && !yaAtendido(l),
+  },
   {
     // Empezó a hablar y no dijo cómo paga: se le recuerda a la hora.
     clave: 'p1_sin_respuesta', desdeHoras: 1, hastaHoras: 23, canales: ['instagram', 'whatsapp'], tipo: 'texto',
@@ -79,7 +101,7 @@ export const PASOS: Paso[] = [
 
 export const TEXTOS_POR_DEFECTO: Record<string, string> = {
   p1_sin_respuesta: '¿Seguís por ahí? 🙌 Contame cómo pensás pagarla (contado, tarjeta o DNI) y te paso el precio al toque.',
-  p2_antes_24h: 'Hola {nombre}! Te escribo de Motobox por {moto}. Hoy tenemos stock para entrega inmediata. ¿Querés que te pase el precio final y te la reservemos?',
+  p2_antes_24h: 'Hola {nombre}! Te escribo de Motobox por {moto}. ¿Querés que te pase el precio y las formas de pago? Aceptamos todas las tarjetas de crédito, anticipo + cuotas o contado.',
 }
 
 export function horaCordoba(fecha: Date): number {
@@ -114,8 +136,8 @@ export function completarTexto(plantilla: string, l: LeadSeguimiento): string {
 export function decidir(l: LeadSeguimiento, previos: EnvioPrevio[], ahora: Date, cfg: ConfigSeguimiento): Decision | null {
   if (!l.sendpulse_contact_id || !l.bot_ultimo_evento_at) return null
   if (ESTADOS_FINALES.has(l.estado)) return null
-  // Baja = dijo que no le interesa o no califica sin anticipo: no se le escribe más.
-  if (l.prioridad === 'baja') return null
+  // Baja = dijo que no le interesa o no califica: solo se le manda el rescate de rechazados.
+  const esBaja = l.prioridad === 'baja'
   const canal = canalDe(l)
   if (!canal) return null
 
@@ -131,6 +153,7 @@ export function decidir(l: LeadSeguimiento, previos: EnvioPrevio[], ahora: Date,
 
   for (const paso of PASOS) {
     if (enviados.has(paso.clave)) continue
+    if (esBaja && paso.clave !== 'p0_rescate') continue
     if (horas < paso.desdeHoras || horas >= paso.hastaHoras) continue
     if (!paso.canales.includes(canal)) continue
     if (!paso.aplica(l)) continue
@@ -139,7 +162,7 @@ export function decidir(l: LeadSeguimiento, previos: EnvioPrevio[], ahora: Date,
       if (!plantilla) continue
       return { paso: paso.clave, canal, tipo: 'texto', texto: completarTexto(plantilla, l) }
     }
-    const flowId = cfg.flujos[paso.clave]
+    const flowId = cfg.flujos[`${paso.clave}_${canal}`] ?? cfg.flujos[paso.clave]
     if (!flowId) continue
     return { paso: paso.clave, canal, tipo: 'flujo', flowId }
   }

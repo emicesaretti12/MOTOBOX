@@ -12,7 +12,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { crearClienteSendPulse } from './sendpulse.ts'
-import { decidir, TEXTOS_POR_DEFECTO, type ConfigSeguimiento, type LeadSeguimiento, type EnvioPrevio } from './logica.ts'
+import { decidir, completarTexto, TEXTOS_POR_DEFECTO, type ConfigSeguimiento, type LeadSeguimiento, type EnvioPrevio } from './logica.ts'
 
 const env = (n: string) => (Deno.env.get(n) ?? '').trim()
 const db = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), {
@@ -24,6 +24,7 @@ const sendpulse = env('SENDPULSE_API_URL') && env('SENDPULSE_CLIENT_ID') && env(
 
 const MAX_POR_CORRIDA = 40
 const NOMBRE_PASO: Record<string, string> = {
+  p0_rescate: 'rescate de rechazado (agente de cierre)',
   p1_sin_respuesta: 'recordatorio 1 h',
   p2_antes_24h: 'recordatorio antes de 24 h',
   p3_dia_2: 'seguimiento día 2 (plantilla)',
@@ -53,6 +54,8 @@ async function leerConfig(): Promise<{ activo: boolean; cfg: ConfigSeguimiento }
         p2_antes_24h: textoOVacio('seguimiento_texto_p2', TEXTOS_POR_DEFECTO.p2_antes_24h),
       },
       flujos: {
+        p0_rescate_whatsapp: v.seguimiento_flujo_rescate_whatsapp?.trim() || undefined,
+        p0_rescate_instagram: v.seguimiento_flujo_rescate_instagram?.trim() || undefined,
         p3_dia_2: v.seguimiento_flujo_p3?.trim() || undefined,
         p4_dia_5: v.seguimiento_flujo_p4?.trim() || undefined,
       },
@@ -67,9 +70,30 @@ Deno.serve(async (req) => {
   const { data: valido, error: errToken } = await db.rpc('seguimiento_token_valido', { p_token: token })
   if (errToken || valido !== true) return json({ error: 'No autorizado' }, 401)
 
+  // Prueba sobre un solo lead: { "prueba_lead_id": "...", "prueba_paso": "p0_rescate" } manda ese paso ya,
+  // sin mirar si el seguimiento está activo ni la ventana de horas (sí exige el secreto del cron).
+  let pedido: Record<string, unknown> = {}
+  try { pedido = await req.json() } catch { /* cuerpo vacío */ }
+  const pruebaLead = typeof pedido.prueba_lead_id === 'string' ? pedido.prueba_lead_id : null
+  const pruebaPaso = typeof pedido.prueba_paso === 'string' ? pedido.prueba_paso : null
+
   const { activo, cfg } = await leerConfig()
-  if (!activo) return json({ ok: true, activo: false })
+  if (!activo && !pruebaLead) return json({ ok: true, activo: false })
   if (!sendpulse) return json({ ok: false, error: 'Faltan las credenciales de SendPulse' }, 500)
+
+  if (pruebaLead && pruebaPaso) {
+    const { data: l } = await db.from('leads').select('id, nombre, origen, modelo_interes, sendpulse_contact_id').eq('id', pruebaLead).maybeSingle()
+    if (!l?.sendpulse_contact_id) return json({ ok: false, error: 'Lead sin contacto de SendPulse' }, 400)
+    const canal = l.origen === 'instagram' ? 'instagram' : 'whatsapp'
+    const flowId = cfg.flujos[`${pruebaPaso}_${canal}`] ?? cfg.flujos[pruebaPaso]
+    const texto = cfg.textos[pruebaPaso]
+    const envio = flowId
+      ? await sendpulse.ejecutarFlujo(l.sendpulse_contact_id, flowId, canal)
+      : texto
+        ? await sendpulse.enviarTexto(l.sendpulse_contact_id, completarTexto(texto, l as LeadSeguimiento), canal)
+        : { ok: false as const, intentos: 0, error: 'Paso sin flujo ni texto configurado' }
+    return json({ ok: envio.ok, prueba: true, canal, paso: pruebaPaso, ...(envio.ok ? {} : { error: envio.error }) })
+  }
 
   const desde = new Date(Date.now() - 7 * 24 * 36e5).toISOString()
   const { data: leads, error } = await db.from('leads')
