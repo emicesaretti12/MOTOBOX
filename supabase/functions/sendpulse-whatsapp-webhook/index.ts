@@ -1,4 +1,4 @@
-// Supabase Edge Function: sendpulse-whatsapp-webhook (v7 = v6 + reloj para el seguimiento automático)
+// Supabase Edge Function: sendpulse-whatsapp-webhook (v8 = v7 + agente de cierre, tarjeta y red de seguridad)
 // Recibe eventos de los bots de SendPulse (WhatsApp e Instagram) para el flujo de calificación.
 // Función separada: NO reemplaza a sendpulse-lead-webhook (Instagram viejo).
 // Autenticación: header x-webhook-secret contra SENDPULSE_WEBHOOK_SECRET.
@@ -8,6 +8,9 @@
 //   resultado                                         -> guarda aprobado | rechazado sin pisar al CRM (resultado.ts)
 //   derivar | asesor                                  -> el cliente pidió hablar con una persona (prioridad alta)
 //   baja                                              -> el cliente dijo que no le interesa
+//   visita                                            -> el agente de IA agendó una visita (resumen en "visita")
+//   ia_derivar                                        -> el agente de IA terminó: sin interés = baja, si no = derivar
+//   sin_cierre                                        -> el cliente dejó la calificación a medias (queda en el CRM)
 //
 // v6: con crm_config.precalif_bcra_activa = true, cada DNI se consulta en la Central de Deudores del BCRA
 // (precalificacion.ts). La respuesta trae campos planos para que el bot de SendPulse decida qué decir:
@@ -21,6 +24,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { registrarResultado } from './resultado.ts'
 import { precalificar, notaPrecalificacion, type Precalificacion } from './precalificacion.ts'
+import { interpretarVisita, esSinInteres } from './agenda.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -57,9 +61,14 @@ function ahoraAR() {
   return new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour12: false })
 }
 
-function normalizarFormaPago(t?: string): 'cuotas' | 'anticipo_cuotas' | 'contado' | undefined {
+type FormaPago = 'cuotas' | 'anticipo_cuotas' | 'contado' | 'tarjeta'
+
+function normalizarFormaPago(t?: string): FormaPago | undefined {
   if (!t) return undefined
   const x = t.toLowerCase()
+  if (x.includes('tarjeta') || x.includes('naranja') || x.includes('visa') || x.includes('master') || x.includes('cordobesa')) {
+    return 'tarjeta'
+  }
   if (x.includes('anticipo') || x.includes('parte') || x.includes('entrega') || x.includes('mitad')) return 'anticipo_cuotas'
   if (x.includes('contado') || x.includes('efectivo') || x.includes('cash') || x.includes('total')) return 'contado'
   if (x.includes('cuota') || x.includes('financ') || x.includes('credito') || x.includes('crédito') || x.includes('dni')) return 'cuotas'
@@ -77,6 +86,7 @@ const etiquetaForma: Record<string, string> = {
   cuotas: 'cuotas con DNI',
   anticipo_cuotas: 'anticipo + cuotas',
   contado: 'CONTADO',
+  tarjeta: 'TARJETA DE CRÉDITO',
 }
 
 const MENSAJES_BOT = {
@@ -119,10 +129,18 @@ Deno.serve(async (req) => {
     }
 
     let accion = (pick(body, ['accion', 'action']) ?? 'lead_calificado').toLowerCase()
-    let formaForzada: 'contado' | undefined
+    let formaForzada: 'contado' | 'tarjeta' | undefined
     if (accion === 'dni_recibido' || accion === 'financia') accion = 'lead_calificado'
-    if (accion === 'contado') { accion = 'lead_calificado'; formaForzada = 'contado' }
+    // "contado" del bot también cubre a quien paga con tarjeta: se distingue por lo que dijo el cliente.
+    if (accion === 'contado') {
+      accion = 'lead_calificado'
+      formaForzada = normalizarFormaPago(pick(body, ['forma_pago', 'pago'])) === 'tarjeta' ? 'tarjeta' : 'contado'
+    }
     if (accion === 'asesor') accion = 'derivar'
+    // Lo que vuelve a SendPulse cuando el agente de cierre termina: así un mensaje posterior del cliente
+    // ("gracias", "ok") no lo manda de nuevo al flujo de rechazo.
+    const cierreIA = accion === 'visita' || accion === 'ia_derivar' ? { precalificacion: 'cerrado', estado_dni: 'cerrado' } : {}
+    if (accion === 'ia_derivar') accion = esSinInteres(pick(body, ['motivo', 'mensaje', 'notas']) ?? '') ? 'baja' : 'derivar'
 
     const contactId = pick(body, ['contact_id', 'sendpulse_contact_id'])
     // Instagram a veces manda un teléfono vacío o cortado: con menos de 7 dígitos se descarta (la tabla lo exige).
@@ -171,6 +189,54 @@ Deno.serve(async (req) => {
       return json(r.body, r.status)
     }
 
+    // ---------- visita agendada por el agente de IA ----------
+    if (accion === 'visita') {
+      const resumen = pick(body, ['visita', 'resumen', 'motivo', 'mensaje']) ?? ''
+      const lead = await buscarLead()
+      if (!lead) return json({ error: 'Lead no encontrado' }, 404)
+      const fecha = interpretarVisita(resumen)
+      const cuando = fecha
+        ? fecha.toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', weekday: 'long', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+        : 'FECHA A CONFIRMAR'
+      const { error } = await db.from('leads').update({
+        estado: 'en_negociacion',
+        prioridad: 'alta',
+        ...(fecha ? { fecha_agenda: fecha.toISOString() } : {}),
+        bot_ultimo_evento_at: new Date().toISOString(),
+        sendpulse_contact_id: contactId ?? undefined,
+        notas: agregarNota(lead.notas, `VISITA AGENDADA por el agente IA (${cuando}): ${resumen}`),
+      }).eq('id', lead.id)
+      if (error) return json({ error: error.message }, 400)
+      return json({ message: 'Visita agendada', lead_id: lead.id, fecha_visita: fecha?.toISOString() ?? '', ...cierreIA }, 200)
+    }
+
+    // ---------- el cliente dejó la calificación a medias ----------
+    // Red de seguridad: el agente de SendPulse venció sin llegar a una salida. Nadie se pierde: el lead
+    // queda en el CRM (o se anota en el que ya existe) para que un vendedor lo retome.
+    if (accion === 'sin_cierre') {
+      const lead = await buscarLead()
+      const nota = 'Bot: el cliente dejó la conversación sin terminar la calificación. Escribirle para retomarla.'
+      if (lead) {
+        if (lead.estado !== 'nuevo' && lead.estado !== 'contactado') return json({ message: 'Lead ya avanzado, no se toca', lead_id: lead.id }, 200)
+        const { error } = await db.from('leads').update({ notas: agregarNota(lead.notas, nota) }).eq('id', lead.id)
+        if (error) return json({ error: error.message }, 400)
+        return json({ message: 'Lead actualizado', lead_id: lead.id }, 200)
+      }
+      if (!telefono && !contactId) return json({ error: 'Se requiere teléfono o contact_id' }, 400)
+      const { data: creado, error } = await db.from('leads').insert({
+        nombre: nombre ?? `Sin nombre (${origen})`,
+        telefono,
+        origen,
+        estado: 'nuevo',
+        // Sin teléfono (Instagram) es difícil retomarlo: queda en baja para no tapar a los buenos.
+        prioridad: telefono ? 'media' : 'baja',
+        sendpulse_contact_id: contactId,
+        notas: `Nuevo contacto vía ${origen} (bot SendPulse)\n[${ahoraAR()}] ${nota}`,
+      }).select('id').single()
+      if (error) return json({ error: error.message }, 400)
+      return json({ message: 'Lead creado', lead_id: creado.id, is_new: true }, 200)
+    }
+
     // ---------- derivar a una persona / baja ----------
     if (accion === 'derivar' || accion === 'baja') {
       const motivo = pick(body, ['motivo', 'mensaje', 'notas']) ?? ''
@@ -186,9 +252,9 @@ Deno.serve(async (req) => {
           sendpulse_contact_id: contactId ?? undefined,
         }).eq('id', lead.id)
         if (error) return json({ error: error.message }, 400)
-        return json({ message: 'Lead actualizado', lead_id: lead.id }, 200)
+        return json({ message: 'Lead actualizado', lead_id: lead.id, ...cierreIA }, 200)
       }
-      if (accion === 'baja') return json({ message: 'Sin lead previo, nada que hacer' }, 200)
+      if (accion === 'baja') return json({ message: 'Sin lead previo, nada que hacer', ...cierreIA }, 200)
       if (!telefono && !contactId) return json({ error: 'Se requiere teléfono o contact_id' }, 400)
       const { data: creado, error } = await db.from('leads').insert({
         nombre: nombre ?? `Sin nombre (${origen})`,
@@ -201,7 +267,7 @@ Deno.serve(async (req) => {
         notas: `Nuevo contacto vía ${origen} (bot SendPulse)\n[${ahoraAR()}] ${nota}`,
       }).select('id').single()
       if (error) return json({ error: error.message }, 400)
-      return json({ message: 'Lead creado', lead_id: creado.id, is_new: true }, 200)
+      return json({ message: 'Lead creado', lead_id: creado.id, is_new: true, ...cierreIA }, 200)
     }
 
     // ---------- lead calificado ----------
@@ -215,7 +281,7 @@ Deno.serve(async (req) => {
     const usada = pick(body, ['usada', 'usada_detalle', 'lead_usada'])
 
     if (!telefono && !contactId) return json({ error: 'Se requiere teléfono o contact_id' }, 400)
-    const financia = formaPago !== 'contado'
+    const financia = formaPago !== 'contado' && formaPago !== 'tarjeta'
     // Si financia pero el DNI no es válido, NO se pierde el lead: se guarda con alerta para revisión humana.
     const alertaDni = financia && !dniValido
 
@@ -250,7 +316,7 @@ Deno.serve(async (req) => {
     const campos: Record<string, unknown> = {
       forma_pago: formaPago ?? null,
       // Un no apto que ofrece anticipo no se descarta: sigue en media para ofrecerle otra opción.
-      prioridad: formaPago === 'contado' || alertaDni || precalif?.resultado === 'apto'
+      prioridad: formaPago === 'contado' || formaPago === 'tarjeta' || alertaDni || precalif?.resultado === 'apto'
         ? 'alta'
         : noApto && !anticipo ? 'baja' : 'media',
       sendpulse_contact_id: contactId ?? undefined,

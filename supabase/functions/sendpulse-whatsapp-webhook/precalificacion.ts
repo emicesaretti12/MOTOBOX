@@ -140,7 +140,8 @@ export async function precalificar(
     if (consultas.some((c) => c.estado === 'error')) {
       return { resultado: 'sin_verificar', ...vacio, motivo: 'El BCRA no respondió' }
     }
-    return { resultado: 'apto', ...vacio, motivo: 'Sin deudas informadas en el BCRA' }
+    // Sin historial en el BCRA no es "limpio": Credicuotas rechazó a todos los DNI sin historial que se probaron.
+    return { resultado: 'no_apto', ...vacio, motivo: 'Sin historial crediticio en el BCRA' }
   }
 
   // Si por algún motivo los dos CUIL traen datos, se toma el peor.

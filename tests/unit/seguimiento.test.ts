@@ -81,6 +81,21 @@ describe('pasos', () => {
 })
 
 describe('textos', () => {
+  it('p0: al rechazado que no siguió le reabre el flujo de rechazo de su canal, aunque esté en baja', () => {
+    const cfg = { ...CFG, flujos: { ...CFG.flujos, p0_rescate_whatsapp: 'rech-wa', p0_rescate_instagram: 'rech-ig' } }
+    const rechazado = lead({ prioridad: 'baja', forma_pago: 'cuotas', bcra_resultado: 'no_apto', bot_ultimo_evento_at: hace(4) })
+    expect(decidir(rechazado, [], AHORA, cfg)).toEqual({ paso: 'p0_rescate', canal: 'instagram', tipo: 'flujo', flowId: 'rech-ig' })
+    expect(decidir({ ...rechazado, origen: 'whatsapp' }, [], AHORA, cfg)).toMatchObject({ flowId: 'rech-wa' })
+    expect(decidir(lead({ forma_pago: 'cuotas', estado_dni: 'rechazado', bot_ultimo_evento_at: hace(4) }), [], AHORA, cfg)).toMatchObject({ paso: 'p0_rescate' })
+    // Antes de las 3 h no (puede seguir hablando con el agente), y nunca si ya pasó por el agente o pidió una persona.
+    expect(decidir({ ...rechazado, bot_ultimo_evento_at: hace(2) }, [], AHORA, cfg)).toBeNull()
+    expect(decidir({ ...rechazado, notas: '[x] VISITA AGENDADA por el agente IA' }, [], AHORA, cfg)).toBeNull()
+    expect(decidir({ ...rechazado, notas: '[x] Bot: el cliente pidió hablar con un asesor' }, [], AHORA, cfg)).toBeNull()
+    // Sin flujo configurado no se manda; un baja que no es rechazado sigue sin recibir nada.
+    expect(decidir(rechazado, [], AHORA, CFG)).toBeNull()
+    expect(decidir(lead({ prioridad: 'baja', forma_pago: 'cuotas', bot_ultimo_evento_at: hace(19) }), [], AHORA, cfg)).toBeNull()
+  })
+
   it('limpia el nombre y la moto', () => {
     const t = 'Hola {nombre}! Te escribo por {moto}.'
     expect(completarTexto(t, lead({ nombre: 'Maite HABLAR URGENTE!', modelo_interes: 'Keller 110' }))).toBe('Hola Maite! Te escribo por la Keller 110.')

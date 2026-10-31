@@ -3358,6 +3358,10 @@ body {
 .badge-bcra-no_apto { background: rgba(220, 38, 38, 0.08); color: #DC2626; }
 .badge-bcra-sin_verificar { background: var(--warning-light); color: var(--warning); }
 .badge-prioridad-alta { background: rgba(220, 38, 38, 0.1); color: #DC2626; font-weight: 700; }
+.badge-pago-tarjeta { background: rgba(37, 99, 235, 0.1); color: #2563EB; font-weight: 600; }
+.badge-pago-contado { background: rgba(22, 163, 74, 0.12); color: #15803D; font-weight: 600; }
+.badge-pago-anticipo_cuotas { background: rgba(217, 119, 6, 0.12); color: #B45309; }
+.badge-pago-cuotas { background: rgba(100, 116, 139, 0.12); color: #475569; }
 .badge-prioridad-baja { background: rgba(100, 116, 139, 0.12); color: #64748B; }
 .badge-dni-mini { margin-left: 8px; font-size: 0.625rem; padding: 2px 7px; vertical-align: middle; }
 .kanban-card .badge-dni-mini { margin-left: 0; margin-top: 4px; display: inline-block; }

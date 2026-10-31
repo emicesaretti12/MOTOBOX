@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { Plus, Search, X, LayoutGrid, List, Download, Phone, MessageCircle, Trash2, Edit, CheckSquare } from 'lucide-react'
-import { ESTADO_DNI_LABELS, BCRA_LABELS, PRIORIDAD_LABELS, detalleBcra } from '../lib/verificacion'
+import { ESTADO_DNI_LABELS, BCRA_LABELS, PRIORIDAD_LABELS, FORMA_PAGO_LABELS, detalleBcra } from '../lib/verificacion'
 import ParaContactar from '../components/ParaContactar'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
@@ -13,11 +13,12 @@ const STATUS_ORDER = ['nuevo', 'contactado', 'en_negociacion', 'venta_cerrada', 
 const EMPTY_LEAD = { nombre: '', telefono: '', email: '', modelo_interes: '', origen: 'presencial', estado: 'nuevo', vendedor_asignado: '', presupuesto_estimado: '', fecha_agenda: '', notas: '' }
 
 function getWaLink(ph) { if (!ph) return null; const c = ph.replace(/\D/g, ''); return 'https://wa.me/' + (c.startsWith('54') ? c : '54' + c) }
-// Etiquetas que van al lado del nombre: prioridad, resultado del Banco Central y estado del DNI.
+// Etiquetas que van al lado del nombre: prioridad, forma de pago, resultado del Banco Central y estado del DNI.
 function EtiquetasLead({ l }) {
   return (
     <>
       {l.prioridad && l.prioridad !== 'media' && <span className={`badge badge-prioridad-${l.prioridad} badge-dni-mini`}>Prioridad {PRIORIDAD_LABELS[l.prioridad]?.toLowerCase()}</span>}
+      {l.forma_pago && l.forma_pago !== 'cuotas' && <span className={`badge badge-pago-${l.forma_pago} badge-dni-mini`}>{FORMA_PAGO_LABELS[l.forma_pago] || l.forma_pago}</span>}
       {l.bcra_resultado && <span className={`badge badge-bcra-${l.bcra_resultado} badge-dni-mini`} title={detalleBcra(l)}>{BCRA_LABELS[l.bcra_resultado]}</span>}
       {l.estado_dni && <span className={`badge badge-dni-${l.estado_dni} badge-dni-mini`}>DNI {ESTADO_DNI_LABELS[l.estado_dni]?.toLowerCase()}</span>}
     </>
