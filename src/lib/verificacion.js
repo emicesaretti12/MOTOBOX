@@ -22,7 +22,8 @@ export function detalleBcra(lead) {
   if (!lead?.bcra_resultado) return null
   const base = BCRA_LABELS[lead.bcra_resultado] || lead.bcra_resultado
   if (lead.bcra_resultado === 'sin_verificar') return base
-  return lead.bcra_situacion ? `${base} · situación ${lead.bcra_situacion}` : `${base} · sin deudas`
+  if (lead.bcra_situacion) return `${base} · situación ${lead.bcra_situacion}`
+  return lead.bcra_resultado === 'no_apto' ? `${base} · sin historial` : `${base} · sin deudas`
 }
 
 const RELACION_LABELS = { titular: 'Titular', familiar: 'Familiar' }

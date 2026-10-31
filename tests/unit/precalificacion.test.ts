@@ -73,10 +73,10 @@ describe('resumen de deudas', () => {
 describe('precalificar', () => {
   const [hombre, mujer] = cuilesPosibles('30111222')
 
-  it('sin deudas informadas (404 en los dos CUIL) es apto', async () => {
+  it('sin historial en el BCRA (404 en los dos CUIL) es no apto', async () => {
     const { fn, llamadas } = fetchPorUrl({})
     const p = await precalificar('30111222', { apiUrl: API }, { fetch: fn })
-    expect(p.resultado).toBe('apto')
+    expect(p.resultado).toBe('no_apto')
     expect(p.peorSituacion).toBeNull()
     expect(llamadas).toEqual([`${API}/Deudas/${hombre}`, `${API}/Deudas/${mujer}`])
   })
