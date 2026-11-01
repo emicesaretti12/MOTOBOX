@@ -153,13 +153,20 @@ Deno.serve(async (req) => {
     const telefonoRaw = pick(body, ['telefono', 'phone', 'whatsapp'])
     const telefono = telefonoRaw && soloDigitos(telefonoRaw).length >= 7 ? telefonoRaw : undefined
     const origen = normalizarOrigen(pick(body, ['origen', 'canal', 'channel']))
-    const nombre = pick(body, ['nombre', 'name', 'full_name'])
+    // El agente a veces completa "Cliente" cuando no sabe el nombre: se usa el nombre del perfil de Instagram.
+    const nombreDicho = pick(body, ['nombre', 'name'])
+    const nombre = (nombreDicho && !/^(el |la )?cliente$/i.test(nombreDicho) ? nombreDicho : undefined) ?? pick(body, ['full_name'])
+    const usuarioIg = pick(body, ['usuario_ig', 'username'])?.replace(/^@/, '')
+    const encabezado = `Nuevo contacto vía ${origen} (bot SendPulse)${usuarioIg ? ` — Instagram @${usuarioIg}` : ''}`
+    // Si el lead quedó como "Sin nombre" o "Cliente" y ahora sabemos cómo se llama, se corrige.
+    const nombreMejorado = (l: { nombre?: string | null }) =>
+      nombre && (!l.nombre || /^(sin nombre|cliente$)/i.test(l.nombre.trim())) ? { nombre } : {}
     const detalleCanal = pick(body, ['detalle_canal', 'campana', 'campaign'])
 
     const db = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
 
     async function buscarLead() {
-      const cols = 'id, notas, dni_intentos, telefono, estado'
+      const cols = 'id, nombre, notas, dni_intentos, telefono, estado'
       if (contactId) {
         const { data } = await db.from('leads').select(cols)
           .eq('sendpulse_contact_id', contactId).order('created_at', { ascending: false }).limit(1)
@@ -224,7 +231,7 @@ Deno.serve(async (req) => {
       const nota = 'Bot: el cliente dejó la conversación sin terminar la calificación. Escribirle para retomarla.'
       if (lead) {
         if (lead.estado !== 'nuevo' && lead.estado !== 'contactado') return json({ message: 'Lead ya avanzado, no se toca', lead_id: lead.id }, 200)
-        const { error } = await db.from('leads').update({ notas: agregarNota(lead.notas, nota) }).eq('id', lead.id)
+        const { error } = await db.from('leads').update({ ...nombreMejorado(lead), notas: agregarNota(lead.notas, nota) }).eq('id', lead.id)
         if (error) return json({ error: error.message }, 400)
         return json({ message: 'Lead actualizado', lead_id: lead.id }, 200)
       }
@@ -237,7 +244,7 @@ Deno.serve(async (req) => {
         // Sin teléfono (Instagram) es difícil retomarlo: queda en baja para no tapar a los buenos.
         prioridad: telefono ? 'media' : 'baja',
         sendpulse_contact_id: contactId,
-        notas: `Nuevo contacto vía ${origen} (bot SendPulse)\n[${ahoraAR()}] ${nota}`,
+        notas: `${encabezado}\n[${ahoraAR()}] ${nota}`,
       }).select('id').single()
       if (error) return json({ error: error.message }, 400)
       return json({ message: 'Lead creado', lead_id: creado.id, is_new: true }, 200)
@@ -252,6 +259,7 @@ Deno.serve(async (req) => {
         : `Bot: el cliente dijo que no le interesa${motivo ? ` (${motivo})` : ''}`
       if (lead) {
         const { error } = await db.from('leads').update({
+          ...nombreMejorado(lead),
           prioridad: accion === 'derivar' ? 'alta' : 'baja',
           ...(accion === 'derivar' ? { bot_ultimo_evento_at: new Date().toISOString() } : {}),
           notas: agregarNota(lead.notas, nota),
@@ -270,7 +278,7 @@ Deno.serve(async (req) => {
         prioridad: 'alta',
         bot_ultimo_evento_at: new Date().toISOString(),
         sendpulse_contact_id: contactId,
-        notas: `Nuevo contacto vía ${origen} (bot SendPulse)\n[${ahoraAR()}] ${nota}`,
+        notas: `${encabezado}\n[${ahoraAR()}] ${nota}`,
       }).select('id').single()
       if (error) return json({ error: error.message }, 400)
       return json({ message: 'Lead creado', lead_id: creado.id, is_new: true, ...cierreIA }, 200)
@@ -363,6 +371,7 @@ Deno.serve(async (req) => {
     if (lead) {
       if (dniValido) campos.dni_intentos = intento
       if (lead.estado === 'perdido') campos.estado = 'nuevo'
+      Object.assign(campos, nombreMejorado(lead))
       campos.notas = agregarNota(lead.notas, nota + (lead.estado === 'perdido' ? ' — REACTIVADO (estaba perdido)' : ''))
       const { error } = await db.from('leads').update(campos).eq('id', lead.id)
       if (error) {
@@ -379,7 +388,7 @@ Deno.serve(async (req) => {
       origen,
       estado: 'nuevo',
       dni_intentos: dniValido ? 1 : 0,
-      notas: `Nuevo contacto vía ${origen} (bot SendPulse)\n[${ahoraAR()}] ${nota}`,
+      notas: `${encabezado}\n[${ahoraAR()}] ${nota}`,
     }).select('id').single()
     if (error) {
       console.error('Error creando lead', error.code, error.message)
