@@ -31,6 +31,14 @@ export interface ConfigPrecalificacion {
   situacionMaxima?: number
   apiUrl?: string
   timeoutMs?: number
+  // DNI desde el cual se considera menor de 21 años (los DNI se asignan en orden al nacer). Sin valor: no se mira.
+  // Los DNI de extranjeros (90.000.000 en adelante) no se cuentan.
+  dniMaximo?: number
+  // Deuda total mínima (en pesos) para considerar que tiene historial de verdad. Situación 1 con una deuda
+  // chica (Mercado Libre, Naranja Digital, un celular) no alcanza para Credicuotas. 0 = no se mira.
+  deudaMinima?: number
+  // Meses del historial en los que no puede haber una situación peor que la máxima.
+  mesesHistorial?: number
 }
 
 interface Dependencias {
@@ -103,6 +111,20 @@ export function resumirDeudas(cuerpo: any): ResumenDeudas {
   return { peorSituacion: peor, entidades: entidades.length, montoTotal: monto, procesoJudicial: judicial }
 }
 
+// Peor situación en los últimos `meses` períodos del historial (Deudas/Historicas).
+export function peorSituacionHistorica(cuerpo: any, meses: number): number | null {
+  const periodos: any[] = cuerpo?.results?.periodos ?? []
+  const recientes = [...periodos].sort((a, b) => String(b.periodo).localeCompare(String(a.periodo))).slice(0, meses)
+  let peor: number | null = null
+  for (const p of recientes) {
+    for (const e of p?.entidades ?? []) {
+      const s = Number(e.situacion)
+      if (Number.isFinite(s)) peor = peor === null ? s : Math.max(peor, s)
+    }
+  }
+  return peor
+}
+
 // Cheques rechazados que todavía no se pagaron.
 export function contarChequesImpagos(cuerpo: any): number {
   let n = 0
@@ -129,6 +151,10 @@ export async function precalificar(
 
   const cuiles = cuilesPosibles(dni)
   if (!cuiles.length) return { resultado: 'sin_verificar', ...vacio, motivo: 'DNI inválido' }
+  const numero = Number(dni.replace(/\D/g, ''))
+  if (cfg.dniMaximo && numero >= cfg.dniMaximo && numero < 90000000) {
+    return { resultado: 'no_apto', ...vacio, motivo: 'Menor de 21 años (por el número de DNI)' }
+  }
 
   const consultas = await Promise.all(cuiles.map((c) => consultar(`${base}/Deudas/${c}`, d, timeoutMs)))
   const conDatos = consultas
@@ -162,6 +188,20 @@ export async function precalificar(
   if (chequesImpagos > 0) return { resultado: 'no_apto', ...datos, motivo: `${chequesImpagos} cheque(s) rechazado(s) sin pagar` }
   if (peor.peorSituacion !== null && peor.peorSituacion > maxima) {
     return { resultado: 'no_apto', ...datos, motivo: `Situación ${peor.peorSituacion} en el BCRA` }
+  }
+
+  // Historial: una situación mala en los últimos meses también descarta, aunque hoy esté en 1.
+  const historicas = await consultar(`${base}/Deudas/Historicas/${peor.cuil}`, d, timeoutMs)
+  if (historicas.estado === 'ok') {
+    const peorHistorica = peorSituacionHistorica(historicas.cuerpo, cfg.mesesHistorial ?? 12)
+    if (peorHistorica !== null && peorHistorica > maxima) {
+      return { resultado: 'no_apto', ...datos, motivo: `Situación ${peorHistorica} en los últimos ${cfg.mesesHistorial ?? 12} meses` }
+    }
+  }
+
+  // Situación 1 con deuda muy chica = casi sin historial: la financiera lo rechaza igual.
+  if (cfg.deudaMinima && peor.montoTotal < cfg.deudaMinima) {
+    return { resultado: 'no_apto', ...datos, motivo: `Historial crediticio muy chico (deuda total $${Math.round(peor.montoTotal).toLocaleString('es-AR')})` }
   }
   return {
     resultado: 'apto',

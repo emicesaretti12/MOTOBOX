@@ -74,6 +74,8 @@ describe('pasos', () => {
       expect(decidir(lead({ estado }), [], AHORA, CFG)).toBeNull()
     }
     expect(decidir(lead({ prioridad: 'baja' }), [], AHORA, CFG)).toBeNull()
+    // El que dejó la calificación a medias (baja por no tener teléfono) sí recibe el recordatorio.
+    expect(decidir(lead({ prioridad: 'baja', notas: '[x] Bot: el cliente dejó la conversación sin terminar la calificación.' }), [], AHORA, CFG)).toMatchObject({ paso: 'p1_sin_respuesta' })
     expect(decidir(lead({ sendpulse_contact_id: null }), [], AHORA, CFG)).toBeNull()
     expect(decidir(lead({ bot_ultimo_evento_at: null }), [], AHORA, CFG)).toBeNull()
     expect(decidir(lead({ origen: 'presencial' }), [], AHORA, CFG)).toBeNull()
