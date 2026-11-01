@@ -71,6 +71,8 @@ export function yaAtendido(l: LeadSeguimiento): boolean {
   return YA_ATENDIDO.test(l.notas ?? '')
 }
 
+const ABANDONO = /sin terminar la calificación/i
+
 export const PASOS: Paso[] = [
   {
     // Rechazado que no siguió: se le reabre el flujo de rechazo con el agente de cierre.
@@ -100,7 +102,7 @@ export const PASOS: Paso[] = [
 ]
 
 export const TEXTOS_POR_DEFECTO: Record<string, string> = {
-  p1_sin_respuesta: '¿Seguís por ahí? 🙌 Contame cómo pensás pagarla (contado, tarjeta o DNI) y te paso el precio al toque.',
+  p1_sin_respuesta: '¿Seguís por ahí? 🙌 Te cuento que podés sacarla con tarjeta de crédito (aceptamos todas), con anticipo + cuotas o de contado. ¿Cómo la pensás pagar?',
   p2_antes_24h: 'Hola {nombre}! Te escribo de Motobox por {moto}. ¿Querés que te pase el precio y las formas de pago? Aceptamos todas las tarjetas de crédito, anticipo + cuotas o contado.',
 }
 
@@ -137,7 +139,9 @@ export function decidir(l: LeadSeguimiento, previos: EnvioPrevio[], ahora: Date,
   if (!l.sendpulse_contact_id || !l.bot_ultimo_evento_at) return null
   if (ESTADOS_FINALES.has(l.estado)) return null
   // Baja = dijo que no le interesa o no califica: solo se le manda el rescate de rechazados.
-  const esBaja = l.prioridad === 'baja'
+  // Excepción: el que dejó la calificación a medias queda en baja solo por no tener teléfono; ese sí recibe
+  // los recordatorios (p1/p2) para retomar la charla.
+  const esBaja = l.prioridad === 'baja' && !ABANDONO.test(l.notas ?? '')
   const canal = canalDe(l)
   if (!canal) return null
 

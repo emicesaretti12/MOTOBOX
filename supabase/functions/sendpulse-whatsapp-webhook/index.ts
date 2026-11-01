@@ -96,18 +96,22 @@ const MENSAJES_BOT = {
   sin_verificar: 'Recibimos tu DNI. Un asesor lo revisa y te escribe en breve.',
 }
 
-type ConfigPrecalif = { activa: boolean; situacionMaxima: number; intentosMax: number }
+type ConfigPrecalif = { activa: boolean; situacionMaxima: number; intentosMax: number; dniMaximo: number; deudaMinima: number }
 
 async function leerConfigPrecalif(db: ReturnType<typeof createClient>): Promise<ConfigPrecalif> {
-  const apagada = { activa: false, situacionMaxima: 2, intentosMax: 3 }
+  const apagada = { activa: false, situacionMaxima: 2, intentosMax: 3, dniMaximo: 0, deudaMinima: 0 }
   const { data, error } = await db.from('crm_config').select('clave, valor')
-    .in('clave', ['precalif_bcra_activa', 'precalif_situacion_maxima', 'precalif_intentos_max'])
+    .in('clave', ['precalif_bcra_activa', 'precalif_situacion_maxima', 'precalif_intentos_max', 'precalif_dni_maximo', 'precalif_deuda_minima'])
   if (error || !data) return apagada
   const v = Object.fromEntries(data.map((r: { clave: string; valor: string }) => [r.clave, String(r.valor)]))
   return {
     activa: v.precalif_bcra_activa === 'true',
     situacionMaxima: Number(v.precalif_situacion_maxima) || 2,
     intentosMax: Number(v.precalif_intentos_max) || 3,
+    // Por defecto: DNI 46.000.000 o más = menor de 21; deuda total menor a $1.000.000 = historial muy chico.
+    // Con 0 en crm_config se apaga cada regla.
+    dniMaximo: v.precalif_dni_maximo === undefined ? 46000000 : Number(v.precalif_dni_maximo) || 0,
+    deudaMinima: v.precalif_deuda_minima === undefined ? 1000000 : Number(v.precalif_deuda_minima) || 0,
   }
 }
 
@@ -235,14 +239,14 @@ Deno.serve(async (req) => {
         if (error) return json({ error: error.message }, 400)
         return json({ message: 'Lead actualizado', lead_id: lead.id }, 200)
       }
-      if (!telefono && !contactId) return json({ error: 'Se requiere teléfono o contact_id' }, 400)
+      // Sin teléfono no hay forma de contactarlo: no se carga (no ensucia el CRM).
+      if (!telefono) return json({ message: 'Sin teléfono: no se carga en el CRM' }, 200)
       const { data: creado, error } = await db.from('leads').insert({
         nombre: nombre ?? `Sin nombre (${origen})`,
         telefono,
         origen,
         estado: 'nuevo',
-        // Sin teléfono (Instagram) es difícil retomarlo: queda en baja para no tapar a los buenos.
-        prioridad: telefono ? 'media' : 'baja',
+        prioridad: 'media',
         sendpulse_contact_id: contactId,
         notas: `${encabezado}\n[${ahoraAR()}] ${nota}`,
       }).select('id').single()
@@ -304,11 +308,13 @@ Deno.serve(async (req) => {
 
     // ---------- precalificación BCRA (v6) ----------
     let precalif: Precalificacion | null = null
-    let cfgPrecalif: ConfigPrecalif = { activa: false, situacionMaxima: 2, intentosMax: 3 }
+    let cfgPrecalif: ConfigPrecalif = { activa: false, situacionMaxima: 2, intentosMax: 3, dniMaximo: 0, deudaMinima: 0 }
     if (dniValido && financia) {
       cfgPrecalif = await leerConfigPrecalif(db)
       if (cfgPrecalif.activa) {
-        precalif = await precalificar(dniDigitos!, { situacionMaxima: cfgPrecalif.situacionMaxima })
+        precalif = await precalificar(dniDigitos!, {
+          situacionMaxima: cfgPrecalif.situacionMaxima, dniMaximo: cfgPrecalif.dniMaximo, deudaMinima: cfgPrecalif.deudaMinima,
+        })
       }
     }
     const noApto = precalif?.resultado === 'no_apto'

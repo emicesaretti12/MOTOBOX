@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
-  armarCuil, cuilesPosibles, precalificar, resumirDeudas, contarChequesImpagos, notaPrecalificacion,
+  armarCuil, cuilesPosibles, precalificar, resumirDeudas, contarChequesImpagos, notaPrecalificacion, peorSituacionHistorica,
 } from '../../supabase/functions/sendpulse-whatsapp-webhook/precalificacion.ts'
 
 const API = 'https://bcra.test/CentralDeDeudores/v1.0'
@@ -148,6 +148,46 @@ describe('precalificar', () => {
     const { fn } = fetchPorUrl({})
     expect((await precalificar('12', { apiUrl: API }, { fetch: fn })).resultado).toBe('sin_verificar')
     expect(fn).not.toHaveBeenCalled()
+  })
+})
+
+describe('filtros más estrictos (Credicuotas)', () => {
+  const [hombre] = cuilesPosibles('30111222')
+  const conDeuda = (monto: number) => fetchPorUrl({
+    [`Deudas/${hombre}`]: respuesta(200, deudas(hombre, [{ periodo: '202609', entidades: [{ situacion: 1, monto }] }])),
+  }).fn
+
+  it('DNI de menor de 21 es no apto sin consultar; los DNI de extranjeros no cuentan', async () => {
+    const { fn, llamadas } = fetchPorUrl({})
+    const p = await precalificar('47351817', { apiUrl: API, dniMaximo: 46000000 }, { fetch: fn })
+    expect(p).toMatchObject({ resultado: 'no_apto', motivo: 'Menor de 21 años (por el número de DNI)' })
+    expect(llamadas).toEqual([])
+    const ext = await precalificar('94123456', { apiUrl: API, dniMaximo: 46000000 }, { fetch: fetchPorUrl({}).fn })
+    expect(ext.motivo).toBe('Sin historial crediticio en el BCRA')
+  })
+
+  it('situación 1 con deuda muy chica es no apto', async () => {
+    const chica = await precalificar('30111222', { apiUrl: API, deudaMinima: 1000000 }, { fetch: conDeuda(87) })
+    expect(chica.resultado).toBe('no_apto')
+    expect(chica.motivo).toMatch(/Historial crediticio muy chico/)
+    const grande = await precalificar('30111222', { apiUrl: API, deudaMinima: 1000000 }, { fetch: conDeuda(1500) })
+    expect(grande.resultado).toBe('apto')
+  })
+
+  it('una situación mala en los últimos 12 meses es no apto aunque hoy esté en 1', async () => {
+    const periodos = [
+      { periodo: '202609', entidades: [{ situacion: 1, monto: 2000 }] },
+      { periodo: '202603', entidades: [{ situacion: 3, monto: 500 }] },
+      { periodo: '202401', entidades: [{ situacion: 5, monto: 500 }] },
+    ]
+    const fn = fetchPorUrl({
+      [`Deudas/${hombre}`]: respuesta(200, deudas(hombre, [periodos[0]])),
+      [`Historicas/${hombre}`]: respuesta(200, deudas(hombre, periodos.slice(0, 2))),
+    }).fn
+    const p = await precalificar('30111222', { apiUrl: API }, { fetch: fn })
+    expect(p).toMatchObject({ resultado: 'no_apto', motivo: 'Situación 3 en los últimos 12 meses' })
+    expect(peorSituacionHistorica(deudas('1', periodos), 12)).toBe(5)
+    expect(peorSituacionHistorica(deudas('1', periodos), 1)).toBe(1)
   })
 })
 
