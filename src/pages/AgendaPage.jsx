@@ -38,6 +38,7 @@ export default function AgendaPage() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [filterVendedor, setFilterVendedor] = useState('')
   const [viewMode, setViewMode] = useState('semana') // semana | dia
+  const [lista, setLista] = useState(null) // null | 'proximas' | 'vencidas'
 
   const today = new Date()
   const monday = useMemo(() => getMonday(weekOffset), [weekOffset])
@@ -69,6 +70,18 @@ export default function AgendaPage() {
     return f
   }, [leads, filterVendedor])
 
+  // Listas completas (no solo la semana): próximas por fecha, vencidas por probabilidad de compra.
+  const listas = useMemo(() => {
+    const abiertas = filteredLeads.filter(l => !l.duplicado_de && !['venta_cerrada', 'perdido'].includes(l.estado))
+    const ahora = Date.now()
+    return {
+      proximas: abiertas.filter(l => new Date(l.fecha_agenda).getTime() >= ahora)
+        .sort((a, b) => new Date(a.fecha_agenda) - new Date(b.fecha_agenda)),
+      vencidas: abiertas.filter(l => new Date(l.fecha_agenda).getTime() < ahora)
+        .sort((a, b) => (b.puntaje_compra ?? -1) - (a.puntaje_compra ?? -1) || new Date(b.fecha_agenda) - new Date(a.fecha_agenda)),
+    }
+  }, [filteredLeads])
+
   // Stats
   const stats = useMemo(() => ({
     hoy: leads.filter(l => l.fecha_agenda && isToday(new Date(l.fecha_agenda))).length,
@@ -99,9 +112,44 @@ export default function AgendaPage() {
       <div className="stats-row">
         <div className="stat-card"><div className="stat-card-header"><div className="stat-card-icon red"><Calendar size={20} /></div></div><div className="stat-card-value">{stats.hoy}</div><div className="stat-card-label">Citas Hoy</div></div>
         <div className="stat-card"><div className="stat-card-header"><div className="stat-card-icon blue"><Clock size={20} /></div></div><div className="stat-card-value">{stats.semana}</div><div className="stat-card-label">Esta Semana</div></div>
-        <div className="stat-card"><div className="stat-card-header"><div className="stat-card-icon purple"><Calendar size={20} /></div></div><div className="stat-card-value">{stats.vencidas}</div><div className="stat-card-label">Vencidas</div></div>
+        <button type="button" className={`stat-card stat-card-boton ${lista === 'proximas' ? 'activa' : ''}`} onClick={() => setLista(lista === 'proximas' ? null : 'proximas')} title="Ver todas las citas que vienen"><div className="stat-card-header"><div className="stat-card-icon blue"><Calendar size={20} /></div></div><div className="stat-card-value">{listas.proximas.length}</div><div className="stat-card-label">Próximas (ver lista)</div></button>
+        <button type="button" className={`stat-card stat-card-boton ${lista === 'vencidas' ? 'activa' : ''}`} onClick={() => setLista(lista === 'vencidas' ? null : 'vencidas')} title="Ver las citas que ya pasaron sin cerrar"><div className="stat-card-header"><div className="stat-card-icon purple"><Calendar size={20} /></div></div><div className="stat-card-value">{stats.vencidas}</div><div className="stat-card-label">Vencidas (ver lista)</div></button>
         <div className="stat-card"><div className="stat-card-header"><div className="stat-card-icon yellow"><Calendar size={20} /></div></div><div className="stat-card-value">{stats.sinAgendar}</div><div className="stat-card-label">Sin Agendar</div></div>
       </div>
+
+      {lista && (
+        <div className="card agenda-lista">
+          <div className="agenda-day-header">
+            <div className="agenda-day-title">
+              <span className="agenda-day-name">{lista === 'proximas' ? 'Próximas citas' : 'Citas vencidas sin cerrar'}</span>
+              <span className="agenda-day-date">{lista === 'vencidas' ? 'Ordenadas por probabilidad de compra: llamá primero a las de arriba' : 'Ordenadas por fecha'}</span>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setLista(null)}>Cerrar</button>
+          </div>
+          {listas[lista].length === 0 ? <div className="agenda-empty">No hay citas</div> : (
+            <div className="agenda-events">
+              {listas[lista].slice(0, 200).map(l => (
+                <div key={l.id} className={`agenda-event agenda-event-${l.estado}`} onClick={() => navigate(`/leads/${l.id}`)}>
+                  <div className="agenda-event-time">{new Date(l.fecha_agenda).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} {fmtTime(l.fecha_agenda)}</div>
+                  <div className="agenda-event-body">
+                    <div className="agenda-event-name">{l.nombre}{l.puntaje_compra != null && <span className="badge badge-puntaje badge-dni-mini" title={l.puntaje_motivo || ''}>{l.puntaje_compra}</span>}</div>
+                    <div className="agenda-event-meta">
+                      {l.modelo_interes && <span>{l.modelo_interes}</span>}
+                      {isAdmin && l.vendedor?.full_name && <span>· {l.vendedor.full_name}</span>}
+                    </div>
+                  </div>
+                  <div className="agenda-event-actions" onClick={e => e.stopPropagation()}>
+                    {l.telefono && getWa(l.telefono) && <a href={getWa(l.telefono)} target="_blank" rel="noopener" className="btn-icon whatsapp"><MessageCircle size={15} /></a>}
+                    {l.telefono && <a href={`tel:${l.telefono}`} className="btn-icon phone"><Phone size={15} /></a>}
+                  </div>
+                  <span className={`badge badge-${l.estado}`} style={{ fontSize: '0.625rem' }}>{STATUS_LABELS[l.estado]}</span>
+                </div>
+              ))}
+              {listas[lista].length > 200 && <div className="agenda-empty">Se muestran las primeras 200 de {listas[lista].length}</div>}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="filters-bar">
