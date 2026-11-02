@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   etiquetaRelacion, segundosDesde, formatEspera, parseMonto, formatMonto, leerConfig, puedeVerificar,
-  mensajeMotivo, motivoDeErrorRpc, datosDeErrorFuncion, mensajeResultado, leadsParaContactar, enmascararDni,
+  mensajeMotivo, motivoDeErrorRpc, datosDeErrorFuncion, mensajeResultado, leadsParaContactar, enmascararDni, nivelPuntaje,
 } from '../../src/lib/verificacion.js'
 
 describe('helpers de la cola de verificación', () => {
@@ -98,5 +98,17 @@ describe('enmascarar DNI', () => {
   it('muestra solo los últimos 3 dígitos', () => {
     expect(enmascararDni('30111222')).toBe('***222')
     expect(enmascararDni(null)).toBe('-')
+  })
+})
+
+describe('probabilidad de compra', () => {
+  it('alta desde 70, media desde 45, baja debajo; sin puntaje no hay nivel', () => {
+    expect(nivelPuntaje(100)).toBe('alta')
+    expect(nivelPuntaje(70)).toBe('alta')
+    expect(nivelPuntaje(69)).toBe('media')
+    expect(nivelPuntaje(45)).toBe('media')
+    expect(nivelPuntaje(44)).toBe('baja')
+    expect(nivelPuntaje(0)).toBe('baja')
+    expect(nivelPuntaje(null)).toBeNull()
   })
 })

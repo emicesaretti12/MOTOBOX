@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { Plus, Search, X, LayoutGrid, List, Download, Phone, MessageCircle, Trash2, Edit, CheckSquare } from 'lucide-react'
-import { ESTADO_DNI_LABELS, BCRA_LABELS, PRIORIDAD_LABELS, FORMA_PAGO_LABELS, detalleBcra } from '../lib/verificacion'
+import { ESTADO_DNI_LABELS, BCRA_LABELS, PRIORIDAD_LABELS, FORMA_PAGO_LABELS, detalleBcra, nivelPuntaje } from '../lib/verificacion'
 import ParaContactar from '../components/ParaContactar'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
@@ -17,6 +17,8 @@ function getWaLink(ph) { if (!ph) return null; const c = ph.replace(/\D/g, ''); 
 function EtiquetasLead({ l }) {
   return (
     <>
+      {l.puntaje_compra != null && <span className={`badge badge-puntaje badge-puntaje-${nivelPuntaje(l.puntaje_compra)} badge-dni-mini`} title={`Probabilidad de compra: ${l.puntaje_compra}/100${l.puntaje_motivo ? ` — ${l.puntaje_motivo}` : ''}`}>{l.puntaje_compra}</span>}
+      {l.duplicado_de && <span className="badge badge-duplicado badge-dni-mini" title="Hay otro lead con el mismo teléfono">Duplicado</span>}
       {l.prioridad && l.prioridad !== 'media' && <span className={`badge badge-prioridad-${l.prioridad} badge-dni-mini`}>Prioridad {PRIORIDAD_LABELS[l.prioridad]?.toLowerCase()}</span>}
       {l.forma_pago && l.forma_pago !== 'cuotas' && <span className={`badge badge-pago-${l.forma_pago} badge-dni-mini`}>{FORMA_PAGO_LABELS[l.forma_pago] || l.forma_pago}</span>}
       {l.bcra_resultado && <span className={`badge badge-bcra-${l.bcra_resultado} badge-dni-mini`} title={detalleBcra(l)}>{BCRA_LABELS[l.bcra_resultado]}</span>}
@@ -42,6 +44,8 @@ export default function LeadsPage() {
   const [filterDni, setFilterDni] = useState('')
   const [filterPrioridad, setFilterPrioridad] = useState('')
   const [filterBcra, setFilterBcra] = useState('')
+  const [orden, setOrden] = useState('actividad')
+  const [verDuplicados, setVerDuplicados] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingLead, setEditingLead] = useState(null)
   const [formData, setFormData] = useState(EMPTY_LEAD)
@@ -83,6 +87,7 @@ export default function LeadsPage() {
   }
 
   const filtered = useMemo(() => leads.filter(l => {
+    if (!verDuplicados && l.duplicado_de) return false
     if (search && !l.nombre?.toLowerCase().includes(search.toLowerCase()) && !l.telefono?.includes(search) && !l.modelo_interes?.toLowerCase().includes(search.toLowerCase())) return false
     if (filterEstado && l.estado !== filterEstado) return false
     if (filterOrigen && l.origen !== filterOrigen) return false
@@ -92,7 +97,8 @@ export default function LeadsPage() {
     if (filterPrioridad && (l.prioridad || 'media') !== filterPrioridad) return false
     if (filterBcra && l.bcra_resultado !== filterBcra) return false
     return true
-  }), [leads, search, filterEstado, filterOrigen, filterVendedor, filterDni, filterPrioridad, filterBcra])
+  }).sort((a, b) => orden === 'puntaje' ? (b.puntaje_compra ?? -1) - (a.puntaje_compra ?? -1) : 0),
+  [leads, search, filterEstado, filterOrigen, filterVendedor, filterDni, filterPrioridad, filterBcra, orden, verDuplicados])
 
   function openModal(lead) {
     if (lead) {
@@ -248,6 +254,11 @@ export default function LeadsPage() {
             {vendedores.map(v => <option key={v.id} value={v.id}>{v.full_name}</option>)}
           </select>
         )}
+        <select className="filter-select" value={orden} onChange={e => setOrden(e.target.value)} title="Orden de la lista">
+          <option value="actividad">Más recientes primero</option>
+          <option value="puntaje">Más probables de comprar primero</option>
+        </select>
+        <label className="filter-check"><input type="checkbox" checked={verDuplicados} onChange={e => setVerDuplicados(e.target.checked)} /> Ver duplicados</label>
         <div className="view-toggle">
           <button className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`} onClick={() => setViewMode('table')}><List size={14} /> Tabla</button>
           <button className={`view-toggle-btn ${viewMode === 'kanban' ? 'active' : ''}`} onClick={() => setViewMode('kanban')}><LayoutGrid size={14} /> Kanban</button>

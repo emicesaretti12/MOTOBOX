@@ -6,7 +6,7 @@ import { useToast } from '../contexts/ToastContext'
 import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, MoreHorizontal, Edit, Plus, X, Check, Trash2 } from 'lucide-react'
 import { LEAD_ORIGEN_LABELS } from '../lib/constants'
 import VerificacionCredito from '../components/VerificacionCredito'
-import { FORMA_PAGO_LABELS } from '../lib/verificacion'
+import { FORMA_PAGO_LABELS, nivelPuntaje } from '../lib/verificacion'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const TIPO_LABELS = { llamada: 'Llamada', whatsapp: 'WhatsApp', email: 'Email', visita: 'Visita', otro: 'Otro' }
@@ -221,6 +221,7 @@ export default function LeadDetailPage() {
             <div className="detail-row"><span className="detail-label">Vendedor</span><span className="detail-value">{lead.vendedor?.full_name || 'Sin asignar'}</span></div>
             <div className="detail-row"><span className="detail-label">Estado</span><span className="detail-value"><span className={`badge badge-${lead.estado}`}>{STATUS_LABELS[lead.estado]}</span></span></div>
             <div className="detail-row"><span className="detail-label">Prioridad</span><span className="detail-value"><span className={`badge badge-prioridad-${lead.prioridad || 'media'}`}>{{ alta: 'Alta', media: 'Media', baja: 'Baja' }[lead.prioridad] || 'Media'}</span></span></div>
+            <div className="detail-row"><span className="detail-label">Prob. de compra</span><span className="detail-value">{lead.puntaje_compra != null ? <><span className={`badge badge-puntaje badge-puntaje-${nivelPuntaje(lead.puntaje_compra)}`}>{lead.puntaje_compra}/100</span>{lead.puntaje_motivo ? <span className="detail-sub"> {lead.puntaje_motivo}</span> : null}</> : '-'}{lead.duplicado_de ? <> · <button type="button" className="btn-link" onClick={() => navigate(`/leads/${lead.duplicado_de}`)}>Duplicado: ver el lead principal</button></> : null}</span></div>
             <div className="detail-row"><span className="detail-label">Forma de pago</span><span className="detail-value">{lead.forma_pago ? <span className={`badge badge-pago-${lead.forma_pago}`}>{FORMA_PAGO_LABELS[lead.forma_pago] || lead.forma_pago}</span> : '-'}{lead.anticipo ? ` · anticipo ${lead.anticipo}` : ''}</span></div>
             <div className="detail-row"><span className="detail-label">Cita Agendada</span><span className="detail-value">{lead.fecha_agenda ? fmtDate(lead.fecha_agenda) : 'Sin agendar'}</span></div>
             <div className="detail-row"><span className="detail-label">Notas</span><span className="detail-value">{lead.notas || '-'}</span></div>
