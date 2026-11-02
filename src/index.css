@@ -3423,3 +3423,9 @@ body {
 .usado-publish { display: grid; gap: 10px; padding: 14px; border-radius: var(--radius-md); background: var(--gray-50, #fafafa); border: 1px solid var(--gray-200); margin-bottom: 14px; }
 .usado-publish .form-group { margin: 0; max-width: 240px; }
 .usado-hint { margin: 0; font-size: 0.75rem; color: var(--gray-500); }
+
+/* Agenda: tarjetas que abren la lista completa */
+.stat-card-boton { text-align: left; cursor: pointer; font: inherit; border: 1px solid transparent; }
+.stat-card-boton:hover { border-color: var(--gray-300, #d4d4d8); }
+.stat-card-boton.activa { border-color: var(--primary, #2563EB); }
+.agenda-lista { margin-bottom: 16px; padding: 12px; }
