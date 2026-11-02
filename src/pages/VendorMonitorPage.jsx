@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, traerTodos } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Users, Phone, MessageCircle, Mail, MapPin, TrendingUp, Activity } from 'lucide-react'
@@ -30,7 +30,7 @@ export default function VendorMonitorPage() {
     try {
       const [pr, lr, ir] = await Promise.all([
         supabase.from('profiles').select('*').eq('role', 'empleado'),
-        supabase.from('leads').select('*'),
+        traerTodos(() => supabase.from('leads').select('*').order('created_at').order('id')),
         supabase.from('interacciones').select('*, lead:leads!lead_id(nombre), usuario:profiles!usuario_id(full_name)').order('fecha', { ascending: false })
       ])
       setProfiles(pr.data || [])

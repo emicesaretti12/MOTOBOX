@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, traerTodos } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { Calendar, Clock, ChevronLeft, ChevronRight, Phone, MessageCircle, Plus, MapPin } from 'lucide-react'
 
@@ -47,9 +47,11 @@ export default function AgendaPage() {
 
   async function fetchData() {
     try {
-      let q = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(id, full_name)')
-      if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
-      const { data } = await q
+      const { data } = await traerTodos(() => {
+        let q = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(id, full_name)').order('created_at').order('id')
+        if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
+        return q
+      })
       const all = data || []
       setAllLeads(all)
       setLeads(all.filter(l => l.fecha_agenda))
