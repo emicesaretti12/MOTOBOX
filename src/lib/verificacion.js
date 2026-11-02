@@ -25,6 +25,12 @@ export const FORMA_PAGO_LABELS = {
   cuotas: 'Cuotas con DNI',
 }
 
+// Probabilidad de compra (0-100) calculada en la base (migración 019): alta 70+, media 45-69, baja <45.
+export function nivelPuntaje(p) {
+  if (p == null) return null
+  return p >= 70 ? 'alta' : p >= 45 ? 'media' : 'baja'
+}
+
 // Texto corto para mostrar el resultado del BCRA: "BCRA apto · sin deudas", "BCRA no apto · situación 5".
 export function detalleBcra(lead) {
   if (!lead?.bcra_resultado) return null

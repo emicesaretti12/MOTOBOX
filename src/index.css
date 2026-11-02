@@ -3362,6 +3362,14 @@ body {
 .badge-pago-contado { background: rgba(22, 163, 74, 0.12); color: #15803D; font-weight: 600; }
 .badge-pago-anticipo_cuotas { background: rgba(217, 119, 6, 0.12); color: #B45309; }
 .badge-pago-cuotas { background: rgba(100, 116, 139, 0.12); color: #475569; }
+.badge-puntaje { font-variant-numeric: tabular-nums; font-weight: 700; }
+.badge-puntaje-alta { background: rgba(22, 163, 74, 0.14); color: #15803D; }
+.badge-puntaje-media { background: rgba(217, 119, 6, 0.12); color: #B45309; }
+.badge-puntaje-baja { background: rgba(100, 116, 139, 0.12); color: #64748B; }
+.badge-duplicado { background: rgba(220, 38, 38, 0.08); color: #B91C1C; }
+.btn-link { background: none; border: 0; padding: 0; color: var(--primary, #2563EB); cursor: pointer; font: inherit; text-decoration: underline; }
+.detail-sub { color: var(--gray-500); font-size: 0.75rem; }
+.filter-check { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--gray-600); white-space: nowrap; }
 .badge-prioridad-baja { background: rgba(100, 116, 139, 0.12); color: #64748B; }
 .badge-dni-mini { margin-left: 8px; font-size: 0.625rem; padding: 2px 7px; vertical-align: middle; }
 .kanban-card .badge-dni-mini { margin-left: 0; margin-top: 4px; display: inline-block; }
