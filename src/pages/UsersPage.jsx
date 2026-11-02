@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, traerTodos } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { Plus, X, KeyRound, Users, TrendingUp, Award, Target } from 'lucide-react'
@@ -30,7 +30,7 @@ export default function UsersPage() {
     try {
       const [profilesRes, leadsRes] = await Promise.all([
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-        supabase.from('leads').select('vendedor_asignado, estado, presupuesto_estimado')
+        traerTodos(() => supabase.from('leads').select('vendedor_asignado, estado, presupuesto_estimado').order('created_at').order('id'))
       ])
       setProfiles(profilesRes.data || [])
       setLeads(leadsRes.data || [])

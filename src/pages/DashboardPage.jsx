@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, traerTodos } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { Users, Award, Target, DollarSign, ChevronRight, Phone, MessageCircle, Calendar, Flame, Snowflake, Clock, Zap, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react'
@@ -84,15 +84,16 @@ export default function DashboardPage() {
 
   async function fetchData() {
     try {
-      let lq = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(full_name)')
+      const armarLeads = () => {
+        let q = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(full_name)').order('created_at').order('id')
+        if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
+        return q
+      }
       let iq = supabase.from('interacciones')
         .select('*, lead:leads!lead_id(id, nombre, modelo_interes), usuario:profiles!usuario_id(full_name)')
         .order('fecha', { ascending: false }).limit(15)
-      if (!isAdmin) {
-        lq = lq.eq('vendedor_asignado', profile.id)
-        iq = iq.eq('usuario_id', profile.id)
-      }
-      const [lr, ir] = await Promise.all([lq, iq])
+      if (!isAdmin) iq = iq.eq('usuario_id', profile.id)
+      const [lr, ir] = await Promise.all([traerTodos(armarLeads), iq])
       setLeads(lr.data || [])
       setInteracciones(ir.data || [])
     } catch (e) { console.error(e) }

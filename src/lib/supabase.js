@@ -115,3 +115,6 @@ export async function signOut() {
     return { error: err }
   }
 }
+
+
+export { traerTodos } from './paginar'

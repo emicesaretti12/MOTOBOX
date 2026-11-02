@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, traerTodos } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { Plus, Search, X, LayoutGrid, List, Download, Phone, MessageCircle, Trash2, Edit, CheckSquare } from 'lucide-react'
@@ -75,9 +75,11 @@ export default function LeadsPage() {
 
   async function fetchLeads() {
     try {
-      let q = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(id, full_name)').order('created_at', { ascending: false })
-      if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
-      const { data, error } = await q
+      const { data, error } = await traerTodos(() => {
+        let q = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(id, full_name)').order('created_at', { ascending: false }).order('id')
+        if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
+        return q
+      })
       if (error) throw error
       // Arriba lo último que pasó: un lead viejo que vuelve a escribirle al bot sube, no queda enterrado por su fecha de alta.
       const actividad = (l) => Math.max(Date.parse(l.created_at) || 0, Date.parse(l.bot_ultimo_evento_at) || 0)

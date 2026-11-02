@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, traerTodos } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import {
@@ -46,8 +46,11 @@ export default function ProfilePage() {
       const weekAgo = new Date(Date.now() - 7 * 86400000)
 
       // Leads query
-      let leadsQuery = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(id, full_name)')
-      if (!admin) leadsQuery = leadsQuery.eq('vendedor_asignado', profile.id)
+      const leadsQuery = traerTodos(() => {
+        let q = supabase.from('leads').select('*, vendedor:profiles!vendedor_asignado(id, full_name)').order('created_at').order('id')
+        if (!admin) q = q.eq('vendedor_asignado', profile.id)
+        return q
+      })
 
       // Interacciones query
       let intQuery = supabase.from('interacciones')
