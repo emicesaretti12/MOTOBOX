@@ -36,7 +36,8 @@ declare
   ant boolean := l.forma_pago = 'anticipo_cuotas' or l.anticipo is not null or txt ~ '(anticipo|mitad|entrega de)';
   aprob boolean := l.estado_dni = 'aprobado' or coalesce(l.monto_aprobado, 0) > 0 or txt ~ '(aprobad|aprovad)';
   rech boolean := l.estado_dni = 'rechazado' or l.bcra_resultado = 'no_apto' or txt ~ '(rechaz|no aprueba|no califica|menor de 21|dni menor)';
-  neg boolean := txt ~ '(no le interesa|no interesa|no responde|no contesta|\mcaro\M|ya compr|duplicad|numero mal|número mal|telefono mal|teléfono mal|falta (el )?n)';
+  -- Lo negativo sí se toma también de las notas del bot ("el cliente dijo que no le interesa").
+  neg boolean := lower(coalesce(l.notas, '') || ' ' || coalesce(l.nombre, '')) ~ '(no le interesa|no interesa|no responde|no contesta|\mcaro\M|ya compr|duplicad|numero mal|número mal|telefono mal|teléfono mal|falta (el )?n)';
   -- Actividad real del cliente (no updated_at, que cambia con cualquier edición o recálculo).
   ultima timestamptz := greatest(l.created_at, coalesce(l.bot_ultimo_evento_at, l.created_at), coalesce(l.primer_contacto_at, l.created_at));
   dias numeric := extract(epoch from (now() - ultima)) / 86400;
