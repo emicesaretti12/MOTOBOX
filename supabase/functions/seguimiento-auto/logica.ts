@@ -26,6 +26,9 @@ export interface LeadSeguimiento {
   sendpulse_contact_id: string | null
   bot_ultimo_evento_at: string | null
   notas?: string | null
+  fecha_agenda?: string | null
+  duplicado_de?: string | null
+  puntaje_compra?: number | null
 }
 
 export interface EnvioPrevio { paso: string; created_at: string }
@@ -85,6 +88,11 @@ export const PASOS: Paso[] = [
     aplica: (l) => !l.forma_pago && (l.estado === 'nuevo' || l.estado === 'contactado'),
   },
   {
+    // Dijo contado, tarjeta o anticipo y nadie cerró la visita: se lo invita a ver la moto.
+    clave: 'p1v_visita', desdeHoras: 5, hastaHoras: 23, canales: ['instagram', 'whatsapp'], tipo: 'texto',
+    aplica: (l) => esCaliente(l) && !esRechazado(l) && !l.fecha_agenda && (l.estado === 'nuevo' || l.estado === 'contactado'),
+  },
+  {
     // Antes de que cierre la ventana de 24 h: último mensaje libre.
     clave: 'p2_antes_24h', desdeHoras: 18, hastaHoras: 23.5, canales: ['instagram', 'whatsapp'], tipo: 'texto',
     aplica: (l) => l.estado === 'nuevo' || l.estado === 'contactado',
@@ -101,7 +109,17 @@ export const PASOS: Paso[] = [
   },
 ]
 
+// El mismo paso puede tener un texto distinto según el cliente: {paso}_{segmento} (si está configurado).
+export function segmento(l: LeadSeguimiento): 'caliente' | 'dni' | 'general' {
+  if (esCaliente(l) && !esRechazado(l)) return 'caliente'
+  if (l.forma_pago === 'cuotas' && !esRechazado(l)) return 'dni'
+  return 'general'
+}
+
 export const TEXTOS_POR_DEFECTO: Record<string, string> = {
+  p1v_visita: 'Hola {nombre}! Soy Valen de MotoBox 🏍️ ¿Querés pasar a ver {moto}? Estamos en Santa Rosa 4227 (BoxPoint), de lunes a sábado de 9 a 19. Decime qué día te queda cómodo y te la tenemos lista.',
+  p2_antes_24h_caliente: 'Hola {nombre}! ¿Seguís con ganas de {moto}? Si querés te la reservo y pasás a verla por Santa Rosa 4227 (lunes a sábado de 9 a 19). ¿Qué día te queda bien?',
+  p2_antes_24h_dni: 'Hola {nombre}! Mientras revisamos tu DNI, te cuento que con tarjeta de crédito (aceptamos todas, con Naranja hay cuotas bajas) o con un anticipo + cuotas la podés sacar sin esperar la aprobación. ¿Te sirve alguna?',
   p1_sin_respuesta: '¿Seguís por ahí? 🙌 Te cuento que podés sacarla con tarjeta de crédito (aceptamos todas), con anticipo + cuotas o de contado. ¿Cómo la pensás pagar?',
   p2_antes_24h: 'Hola {nombre}! Te escribo de Motobox por {moto}. ¿Querés que te pase el precio y las formas de pago? Aceptamos todas las tarjetas de crédito, anticipo + cuotas o contado.',
 }
@@ -126,7 +144,7 @@ function primerNombre(n: string | null): string {
 export function completarTexto(plantilla: string, l: LeadSeguimiento): string {
   const nombre = primerNombre(l.nombre)
   const modelo = (l.modelo_interes ?? '').trim()
-  const moto = modelo && !/^\d+$/.test(modelo) ? `la ${modelo}` : 'la moto que consultaste'
+  const moto = modelo && !/^\d+$/.test(modelo) && !/consultar|no sabe|ningun|^-$/i.test(modelo) ? `la ${modelo}` : 'la moto que consultaste'
   return plantilla
     .replace(/\{nombre\}/g, nombre)
     .replace(/\{moto\}/g, moto)
@@ -137,6 +155,8 @@ export function completarTexto(plantilla: string, l: LeadSeguimiento): string {
 
 export function decidir(l: LeadSeguimiento, previos: EnvioPrevio[], ahora: Date, cfg: ConfigSeguimiento): Decision | null {
   if (!l.sendpulse_contact_id || !l.bot_ultimo_evento_at) return null
+  // Duplicado (mismo teléfono que otro lead): se le escribe solo al principal.
+  if (l.duplicado_de) return null
   if (ESTADOS_FINALES.has(l.estado)) return null
   // Baja = dijo que no le interesa o no califica: solo se le manda el rescate de rechazados.
   // Excepción: el que dejó la calificación a medias queda en baja solo por no tener teléfono; ese sí recibe
@@ -162,7 +182,8 @@ export function decidir(l: LeadSeguimiento, previos: EnvioPrevio[], ahora: Date,
     if (!paso.canales.includes(canal)) continue
     if (!paso.aplica(l)) continue
     if (paso.tipo === 'texto') {
-      const plantilla = cfg.textos[paso.clave] ?? TEXTOS_POR_DEFECTO[paso.clave]
+      const porSegmento = `${paso.clave}_${segmento(l)}`
+      const plantilla = cfg.textos[porSegmento] ?? TEXTOS_POR_DEFECTO[porSegmento] ?? cfg.textos[paso.clave] ?? TEXTOS_POR_DEFECTO[paso.clave]
       if (!plantilla) continue
       return { paso: paso.clave, canal, tipo: 'texto', texto: completarTexto(plantilla, l) }
     }

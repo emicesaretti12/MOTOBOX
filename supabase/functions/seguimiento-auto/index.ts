@@ -26,6 +26,7 @@ const MAX_POR_CORRIDA = 40
 const NOMBRE_PASO: Record<string, string> = {
   p0_rescate: 'rescate de rechazado (agente de cierre)',
   p1_sin_respuesta: 'recordatorio 1 h',
+  p1v_visita: 'invitación a ver la moto',
   p2_antes_24h: 'recordatorio antes de 24 h',
   p3_dia_2: 'seguimiento día 2 (plantilla)',
   p4_dia_5: 'seguimiento día 5 (plantilla)',
@@ -97,11 +98,13 @@ Deno.serve(async (req) => {
 
   const desde = new Date(Date.now() - 7 * 24 * 36e5).toISOString()
   const { data: leads, error } = await db.from('leads')
-    .select('id, nombre, origen, estado, prioridad, forma_pago, estado_dni, bcra_resultado, modelo_interes, sendpulse_contact_id, bot_ultimo_evento_at, notas')
+    .select('id, nombre, origen, estado, prioridad, forma_pago, estado_dni, bcra_resultado, modelo_interes, sendpulse_contact_id, bot_ultimo_evento_at, notas, fecha_agenda, duplicado_de, puntaje_compra')
     .gte('bot_ultimo_evento_at', desde)
     .not('sendpulse_contact_id', 'is', null)
     .in('origen', ['instagram', 'whatsapp'])
     .not('estado', 'in', '(venta_cerrada,perdido,en_negociacion)')
+    // Primero los que más chances tienen de comprar (si hay más envíos que el máximo por corrida).
+    .order('puntaje_compra', { ascending: false, nullsFirst: false })
     .limit(500)
   if (error) {
     console.error('No se pudieron leer los leads', error.code)

@@ -36,9 +36,10 @@ describe('pasos', () => {
   })
 
   it('p2: entre las 18 y 23,5 h, por cualquier canal', () => {
-    const d = decidir(lead({ bot_ultimo_evento_at: hace(19), forma_pago: 'cuotas' }), [], AHORA, CFG)
+    // Rechazado sin flujo de rescate configurado: le toca el recordatorio general.
+    const d = decidir(lead({ bot_ultimo_evento_at: hace(19), forma_pago: 'cuotas', bcra_resultado: 'no_apto' }), [], AHORA, CFG)
     expect(d).toEqual({ paso: 'p2_antes_24h', canal: 'instagram', tipo: 'texto', texto: 'Hola Juan! P2 la Honda Wave' })
-    expect(decidir(lead({ bot_ultimo_evento_at: hace(23.6), forma_pago: 'cuotas' }), [], AHORA, CFG)).toBeNull()
+    expect(decidir(lead({ bot_ultimo_evento_at: hace(23.6), forma_pago: 'cuotas', bcra_resultado: 'no_apto' }), [], AHORA, CFG)).toBeNull()
   })
 
   it('después de 24 h, Instagram no recibe nada', () => {
@@ -82,6 +83,30 @@ describe('pasos', () => {
   })
 })
 
+describe('seguimiento por segmento', () => {
+  it('al que dijo contado/tarjeta/anticipo se lo invita a ver la moto a las 5 h (una vez, si no tiene visita)', () => {
+    const caliente = lead({ forma_pago: 'tarjeta', bot_ultimo_evento_at: hace(6) })
+    const d = decidir(caliente, [], AHORA, CFG)
+    expect(d).toMatchObject({ paso: 'p1v_visita', tipo: 'texto' })
+    expect((d as { texto: string }).texto).toMatch(/Santa Rosa 4227/)
+    expect(decidir({ ...caliente, fecha_agenda: hace(1) }, [], AHORA, CFG)).toBeNull()
+    expect(decidir({ ...caliente, bot_ultimo_evento_at: hace(4) }, [], AHORA, CFG)).toBeNull()
+  })
+
+  it('el recordatorio de 18 h cambia según el cliente', () => {
+    const previos = [{ paso: 'p1v_visita', created_at: hace(10) }, { paso: 'p1_sin_respuesta', created_at: hace(10) }]
+    const sinTextoP2 = { ...CFG, textos: { p1_sin_respuesta: 'P1' } }
+    const t = (l: LeadSeguimiento) => (decidir(l, previos, AHORA, sinTextoP2) as { texto: string }).texto
+    expect(t(lead({ forma_pago: 'contado', bot_ultimo_evento_at: hace(19) }))).toMatch(/te la reservo/)
+    expect(t(lead({ forma_pago: 'cuotas', estado_dni: 'pendiente', bot_ultimo_evento_at: hace(19) }))).toMatch(/Mientras revisamos tu DNI/)
+    expect(t(lead({ forma_pago: null, bot_ultimo_evento_at: hace(19) }))).toMatch(/precio y las formas de pago/)
+  })
+
+  it('a los duplicados no se les escribe', () => {
+    expect(decidir(lead({ duplicado_de: 'otro' }), [], AHORA, CFG)).toBeNull()
+  })
+})
+
 describe('textos', () => {
   it('p0: al rechazado que no siguió le reabre el flujo de rechazo de su canal, aunque esté en baja', () => {
     const cfg = { ...CFG, flujos: { ...CFG.flujos, p0_rescate_whatsapp: 'rech-wa', p0_rescate_instagram: 'rech-ig' } }
@@ -103,6 +128,7 @@ describe('textos', () => {
     expect(completarTexto(t, lead({ nombre: 'Maite HABLAR URGENTE!', modelo_interes: 'Keller 110' }))).toBe('Hola Maite! Te escribo por la Keller 110.')
     expect(completarTexto(t, lead({ nombre: 'Sin nombre (instagram)', modelo_interes: '110' }))).toBe('Hola! Te escribo por la moto que consultaste.')
     expect(completarTexto(t, lead({ nombre: null, modelo_interes: null }))).toBe('Hola! Te escribo por la moto que consultaste.')
+    expect(completarTexto(t, lead({ nombre: 'Paula', modelo_interes: 'a consultar' }))).toBe('Hola Paula! Te escribo por la moto que consultaste.')
   })
 })
 
