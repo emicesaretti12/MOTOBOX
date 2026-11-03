@@ -240,7 +240,7 @@ export function telefonoWhatsApp(t: string | null | undefined): string | null {
   return `549${d}`
 }
 
-const NO_RECUPERAR = /no le interesa|no quiere|pidió no recibir|ya compr|compró en otro|Seguimiento automático: recupero/i
+const NO_RECUPERAR = /no le interesa|no quiere|pidió no recibir|ya compr|compró en otro|Seguimiento automático: recupero|Recuperación manual/i
 
 export function ultimaActividad(l: LeadRecupero): number {
   return Math.max(...[l.created_at, l.bot_ultimo_evento_at, l.primer_contacto_at].map((f) => (f ? Date.parse(f) || 0 : 0)))
