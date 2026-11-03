@@ -12,7 +12,10 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { crearClienteSendPulse } from './sendpulse.ts'
-import { decidir, completarTexto, TEXTOS_POR_DEFECTO, type ConfigSeguimiento, type LeadSeguimiento, type EnvioPrevio } from './logica.ts'
+import {
+  decidir, completarTexto, horaCordoba, aplicaRecupero, telefonoWhatsApp, TEXTOS_POR_DEFECTO,
+  type ConfigSeguimiento, type LeadSeguimiento, type EnvioPrevio, type LeadRecupero, type ConfigRecupero,
+} from './logica.ts'
 
 const env = (n: string) => (Deno.env.get(n) ?? '').trim()
 const db = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), {
@@ -23,6 +26,7 @@ const sendpulse = env('SENDPULSE_API_URL') && env('SENDPULSE_CLIENT_ID') && env(
   : null
 
 const MAX_POR_CORRIDA = 40
+const MAX_RECUPERO_POR_CORRIDA = 10
 const NOMBRE_PASO: Record<string, string> = {
   p0_rescate: 'rescate de rechazado (agente de cierre)',
   p1_sin_respuesta: 'recordatorio 1 h',
@@ -30,6 +34,7 @@ const NOMBRE_PASO: Record<string, string> = {
   p2_antes_24h: 'recordatorio antes de 24 h',
   p3_dia_2: 'seguimiento día 2 (plantilla)',
   p4_dia_5: 'seguimiento día 5 (plantilla)',
+  p5_recupero: 'recupero por plantilla de WhatsApp',
 }
 
 function json(payload: unknown, status = 200) {
@@ -38,6 +43,103 @@ function json(payload: unknown, status = 200) {
 
 function ahoraAR() {
   return new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour12: false })
+}
+
+// Recupero (p5): plantilla de WhatsApp por teléfono a leads fríos. Apagado por defecto porque cada mensaje
+// lo cobra Meta. crm_config: seguimiento_recupero_activo, _plantilla, _idioma, _bot_id, _max_dia,
+// _puntaje_minimo, _dias_desde, _dias_hasta, _hora_desde, _hora_hasta.
+interface ConfigRecuperoCompleta extends ConfigRecupero {
+  activo: boolean; plantilla: string; idioma: string; botId: string; maxDia: number; horaDesde: number; horaHasta: number
+}
+
+async function leerConfigRecupero(): Promise<ConfigRecuperoCompleta> {
+  const { data } = await db.from('crm_config').select('clave, valor').like('clave', 'seguimiento_recupero_%')
+  const v: Record<string, string> = Object.fromEntries((data ?? []).map((r: { clave: string; valor: string }) => [r.clave.replace('seguimiento_recupero_', ''), String(r.valor ?? '').trim()]))
+  const n = (k: string, def: number) => (v[k] !== undefined && v[k] !== '' && !Number.isNaN(Number(v[k])) ? Number(v[k]) : def)
+  return {
+    activo: v.activo === 'true',
+    plantilla: v.plantilla || 'motobox_recupero_opciones',
+    idioma: v.idioma || 'es_AR',
+    botId: v.bot_id || '',
+    maxDia: n('max_dia', 40),
+    puntajeMinimo: n('puntaje_minimo', 45),
+    puntajeMinimoPerdidos: n('puntaje_minimo_perdidos', 30),
+    diasDesde: n('dias_desde', 3),
+    diasHasta: n('dias_hasta', 90),
+    horaDesde: n('hora_desde', 10),
+    horaHasta: n('hora_hasta', 20),
+  }
+}
+
+async function correrRecupero(ahora: Date, cupoCorrida: number) {
+  const r = await leerConfigRecupero()
+  const res = { recupero_activo: r.activo, recupero_enviados: 0, recupero_fallidos: 0, recupero_cupo_hoy: 0 }
+  if (!r.activo || !r.botId || !sendpulse || cupoCorrida <= 0) return res
+  const hora = horaCordoba(ahora)
+  if (hora < r.horaDesde || hora >= r.horaHasta) return res
+
+  // Tope por día de Córdoba (UTC-3): cuenta envíos y fallos desde las 00:00 de hoy.
+  const inicioDia = new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate(), 3))
+  if (inicioDia > ahora) inicioDia.setUTCDate(inicioDia.getUTCDate() - 1)
+  const { count } = await db.from('seguimientos').select('id', { count: 'exact', head: true })
+    .eq('paso', 'p5_recupero').gte('created_at', inicioDia.toISOString())
+  const cupo = Math.min(cupoCorrida, r.maxDia - (count ?? 0))
+  res.recupero_cupo_hoy = Math.max(r.maxDia - (count ?? 0), 0)
+  if (cupo <= 0) return res
+
+  const { data: leads } = await db.from('leads')
+    .select('id, nombre, telefono, estado, prioridad, notas, duplicado_de, puntaje_compra, created_at, bot_ultimo_evento_at, primer_contacto_at')
+    .not('telefono', 'is', null)
+    .in('estado', ['nuevo', 'contactado', 'perdido'])
+    .is('duplicado_de', null)
+    .gte('puntaje_compra', Math.min(r.puntajeMinimo, r.puntajeMinimoPerdidos))
+    .gte('created_at', new Date(ahora.getTime() - (r.diasHasta + 30) * 864e5).toISOString())
+    .order('puntaje_compra', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(300)
+  const ids = (leads ?? []).map((l) => l.id)
+  const previos = new Map<string, EnvioPrevio[]>()
+  if (ids.length) {
+    const { data: s } = await db.from('seguimientos').select('lead_id, paso, created_at').in('lead_id', ids)
+    for (const x of s ?? []) previos.set(x.lead_id, [...(previos.get(x.lead_id) ?? []), { paso: x.paso, created_at: x.created_at }])
+  }
+  // Un solo mensaje por teléfono aunque haya dos leads con el mismo número.
+  const telefonosUsados = new Set<string>()
+  for (const l of (leads ?? []) as (LeadRecupero & { nombre: string | null })[]) {
+    if (res.recupero_enviados + res.recupero_fallidos >= cupo) break
+    if (!aplicaRecupero(l, previos.get(l.id) ?? [], ahora, r)) continue
+    const tel = telefonoWhatsApp(l.telefono)!
+    if (telefonosUsados.has(tel)) continue
+    telefonosUsados.add(tel)
+
+    const { data: reserva, error: errRes } = await db.from('seguimientos')
+      .insert({ lead_id: l.id, paso: 'p5_recupero', canal: 'whatsapp', estado: 'enviando' })
+      .select('id').maybeSingle()
+    if (errRes || !reserva) continue
+    const envio = await sendpulse.enviarPlantillaPorTelefono(r.botId, tel, r.plantilla, r.idioma)
+    if (envio.ok) {
+      await db.from('seguimientos').update({ estado: 'enviado', error: null, texto: `plantilla ${r.plantilla}` }).eq('id', reserva.id)
+      res.recupero_enviados++
+      const nota = `[${ahoraAR()}] Seguimiento automático: recupero por plantilla de WhatsApp enviado`
+      await db.from('leads').update({ notas: [l.notas, nota].filter(Boolean).join('\n') }).eq('id', l.id)
+    } else {
+      res.recupero_fallidos++
+      console.error('Recupero fallido', envio.error)
+      ;(res as Record<string, unknown>).recupero_error = envio.error
+      // Si en esta corrida ya salió alguno, el problema es del número (sin WhatsApp): queda como fallido.
+      // Si es el primero que falla, puede ser la cuenta (sin saldo, SendPulse caído): se libera para reintentar
+      // y se corta. Si ese mismo lead ya había fallado primero antes, se lo da por fallido para no trabar la cola.
+      const yaFalloAntes = (previos.get(l.id) ?? []).some((p) => p.paso === 'p5_reintento')
+      const deCuenta = /balance|saldo|insufficient|fondos|token|HTTP 5\d\d|HTTP 429|Sin respuesta/i.test(envio.error)
+      if (res.recupero_enviados === 0 && (deCuenta || !yaFalloAntes)) {
+        await db.from('seguimientos').delete().eq('id', reserva.id)
+        if (!deCuenta) await db.from('seguimientos').insert({ lead_id: l.id, paso: 'p5_reintento', canal: 'whatsapp', estado: 'fallido', error: envio.error })
+        break
+      }
+      await db.from('seguimientos').update({ estado: 'fallido', error: envio.error, texto: `plantilla ${r.plantilla}` }).eq('id', reserva.id)
+    }
+  }
+  return res
 }
 
 async function leerConfig(): Promise<{ activo: boolean; cfg: ConfigSeguimiento }> {
@@ -79,8 +181,17 @@ Deno.serve(async (req) => {
   const pruebaPaso = typeof pedido.prueba_paso === 'string' ? pedido.prueba_paso : null
 
   const { activo, cfg } = await leerConfig()
-  if (!activo && !pruebaLead) return json({ ok: true, activo: false })
+  if (!activo && !pruebaLead) return json({ ok: true, activo: false, ...(await correrRecupero(new Date(), MAX_RECUPERO_POR_CORRIDA)) })
   if (!sendpulse) return json({ ok: false, error: 'Faltan las credenciales de SendPulse' }, 500)
+
+  if (pruebaLead && pruebaPaso === 'p5_recupero') {
+    const r = await leerConfigRecupero()
+    const { data: l } = await db.from('leads').select('telefono').eq('id', pruebaLead).maybeSingle()
+    const tel = telefonoWhatsApp(l?.telefono)
+    if (!tel || !r.botId) return json({ ok: false, error: !tel ? 'Lead sin teléfono válido' : 'Falta seguimiento_recupero_bot_id' }, 400)
+    const envio = await sendpulse.enviarPlantillaPorTelefono(r.botId, tel, r.plantilla, r.idioma)
+    return json({ ok: envio.ok, prueba: true, paso: pruebaPaso, ...(envio.ok ? {} : { error: envio.error }) })
+  }
 
   if (pruebaLead && pruebaPaso) {
     const { data: l } = await db.from('leads').select('id, nombre, origen, modelo_interes, sendpulse_contact_id').eq('id', pruebaLead).maybeSingle()
@@ -154,5 +265,6 @@ Deno.serve(async (req) => {
     }
   }
 
-  return json({ ok: true, activo: true, ...resultado })
+  const recupero = await correrRecupero(ahora, Math.min(MAX_RECUPERO_POR_CORRIDA, MAX_POR_CORRIDA - resultado.enviados - resultado.fallidos))
+  return json({ ok: true, activo: true, ...resultado, ...recupero })
 })
