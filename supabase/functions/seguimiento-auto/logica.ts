@@ -130,6 +130,9 @@ export function horaCordoba(fecha: Date): number {
 }
 
 export function canalDe(l: LeadSeguimiento): Canal | null {
+  // Al que se le mandó el recupero por WhatsApp (sea de Instagram o presencial) y respondió, sigue por WhatsApp:
+  // el webhook ya le guardó el contacto de WhatsApp.
+  if (/recupero por plantilla de WhatsApp/i.test(l.notas ?? '')) return 'whatsapp'
   if (l.origen === 'instagram') return 'instagram'
   if (l.origen === 'whatsapp') return 'whatsapp'
   return null
@@ -192,4 +195,67 @@ export function decidir(l: LeadSeguimiento, previos: EnvioPrevio[], ahora: Date,
     return { paso: paso.clave, canal, tipo: 'flujo', flowId }
   }
   return null
+}
+
+// ---------- p5_recupero: plantilla de WhatsApp por teléfono a leads que se enfriaron ----------
+// Fuera de la ventana de 24 h solo se puede escribir con una plantilla aprobada por Meta. Sirve para cualquier
+// origen (Instagram, presencial, referido) siempre que el lead tenga teléfono. Se manda una sola vez por lead,
+// primero a los de mayor probabilidad de compra, con un tope por día (cada mensaje lo cobra Meta).
+
+export interface LeadRecupero {
+  id: string
+  telefono: string | null
+  estado: string
+  prioridad: string | null
+  notas?: string | null
+  duplicado_de?: string | null
+  puntaje_compra?: number | null
+  created_at: string
+  bot_ultimo_evento_at?: string | null
+  primer_contacto_at?: string | null
+}
+
+export interface ConfigRecupero {
+  puntajeMinimo: number // desde qué probabilidad de compra se le escribe
+  puntajeMinimoPerdidos: number // para los marcados como perdidos (su puntaje ya viene castigado)
+  diasDesde: number // días sin actividad para considerarlo frío
+  diasHasta: number // más viejo que esto ya no se recupera
+}
+
+// Teléfono argentino en formato internacional de WhatsApp (549 + área + número, 13 dígitos). null si no se puede.
+export function telefonoWhatsApp(t: string | null | undefined): string | null {
+  let d = String(t ?? '').replace(/\D/g, '')
+  if (d.startsWith('00')) d = d.slice(2)
+  if (d.length === 13 && d.startsWith('549')) return d
+  if (d.length === 12 && d.startsWith('54')) d = d.slice(2)
+  else if (d.length === 13 && d.startsWith('54')) d = d.slice(2) // 54 + 0 + 10 dígitos
+  if (d.startsWith('0')) d = d.slice(1)
+  if (d.length === 12) {
+    // Área de 2 a 4 dígitos + 15 + número: se saca el 15.
+    for (const area of [2, 3, 4]) {
+      if (d.slice(area, area + 2) === '15') { d = d.slice(0, area) + d.slice(area + 2); break }
+    }
+  }
+  if (d.length !== 10 || d.startsWith('15') || !/^[1-3]/.test(d)) return null
+  return `549${d}`
+}
+
+const NO_RECUPERAR = /no le interesa|no quiere|pidió no recibir|ya compr|compró en otro|Seguimiento automático: recupero/i
+
+export function ultimaActividad(l: LeadRecupero): number {
+  return Math.max(...[l.created_at, l.bot_ultimo_evento_at, l.primer_contacto_at].map((f) => (f ? Date.parse(f) || 0 : 0)))
+}
+
+export function aplicaRecupero(l: LeadRecupero, previos: EnvioPrevio[], ahora: Date, cfg: ConfigRecupero): boolean {
+  const perdido = l.estado === 'perdido'
+  if (l.estado !== 'nuevo' && l.estado !== 'contactado' && !perdido) return false
+  if (l.duplicado_de) return false
+  if (!telefonoWhatsApp(l.telefono)) return false
+  if ((l.puntaje_compra ?? 0) < (perdido ? cfg.puntajeMinimoPerdidos : cfg.puntajeMinimo)) return false
+  if (NO_RECUPERAR.test(l.notas ?? '')) return false
+  if (previos.some((p) => p.paso === 'p5_recupero')) return false
+  // Si ya recibió algún seguimiento en las últimas 48 h, se espera.
+  if (previos.some((p) => (ahora.getTime() - (Date.parse(p.created_at) || 0)) / 36e5 < 48)) return false
+  const dias = (ahora.getTime() - ultimaActividad(l)) / 864e5
+  return dias >= cfg.diasDesde && dias <= cfg.diasHasta
 }

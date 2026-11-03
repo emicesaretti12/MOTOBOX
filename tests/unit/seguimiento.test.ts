@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { decidir, completarTexto, horaCordoba, type LeadSeguimiento, type ConfigSeguimiento } from '../../supabase/functions/seguimiento-auto/logica.ts'
+import { decidir, completarTexto, horaCordoba, telefonoWhatsApp, aplicaRecupero, type LeadSeguimiento, type ConfigSeguimiento } from '../../supabase/functions/seguimiento-auto/logica.ts'
 
 const CFG: ConfigSeguimiento = {
   horaDesde: 9, horaHasta: 21, separacionMinHoras: 6,
@@ -137,5 +137,60 @@ describe('cliente SendPulse', () => {
     const a = readFileSync('supabase/functions/dni-resolver/sendpulse.ts', 'utf8')
     const b = readFileSync('supabase/functions/seguimiento-auto/sendpulse.ts', 'utf8')
     expect(b).toBe(a)
+  })
+})
+
+describe('p5_recupero (plantilla por teléfono)', () => {
+  const ahora = new Date('2026-11-02T15:00:00Z')
+  const cfgR = { puntajeMinimo: 45, puntajeMinimoPerdidos: 30, diasDesde: 3, diasHasta: 90 }
+  const base = {
+    id: 'r1', telefono: '351 203-3710', estado: 'contactado', prioridad: 'media', notas: '', duplicado_de: null,
+    puntaje_compra: 60, created_at: '2026-10-10T12:00:00Z', bot_ultimo_evento_at: null, primer_contacto_at: null,
+  }
+
+  it('normaliza teléfonos argentinos a 549…', () => {
+    expect(telefonoWhatsApp('3512033710')).toBe('5493512033710')
+    expect(telefonoWhatsApp('+54 9 351 203-3710')).toBe('5493512033710')
+    expect(telefonoWhatsApp('543512294829')).toBe('5493512294829')
+    expect(telefonoWhatsApp('03518072211')).toBe('5493518072211')
+    expect(telefonoWhatsApp('351152033710')).toBe('5493512033710')
+    expect(telefonoWhatsApp('1563074971')).toBeNull()
+    expect(telefonoWhatsApp('12345')).toBeNull()
+    expect(telefonoWhatsApp(null)).toBeNull()
+  })
+
+  it('manda a leads fríos con chances, una sola vez', () => {
+    expect(aplicaRecupero(base, [], ahora, cfgR)).toBe(true)
+    expect(aplicaRecupero(base, [{ paso: 'p5_recupero', created_at: '2026-10-20T12:00:00Z' }], ahora, cfgR)).toBe(false)
+  })
+
+  it('no manda a recientes, muy viejos, de bajo puntaje, cerrados, duplicados o que no quieren', () => {
+    expect(aplicaRecupero({ ...base, created_at: '2026-11-01T12:00:00Z' }, [], ahora, cfgR)).toBe(false)
+    expect(aplicaRecupero({ ...base, created_at: '2026-06-01T12:00:00Z' }, [], ahora, cfgR)).toBe(false)
+    expect(aplicaRecupero({ ...base, puntaje_compra: 30 }, [], ahora, cfgR)).toBe(false)
+    expect(aplicaRecupero({ ...base, estado: 'venta_cerrada' }, [], ahora, cfgR)).toBe(false)
+    expect(aplicaRecupero({ ...base, estado: 'perdido', puntaje_compra: 35 }, [], ahora, cfgR)).toBe(true)
+    expect(aplicaRecupero({ ...base, estado: 'perdido', puntaje_compra: 25 }, [], ahora, cfgR)).toBe(false)
+    expect(aplicaRecupero({ ...base, estado: 'perdido', notas: 'Ya compró en otro lado' }, [], ahora, cfgR)).toBe(false)
+    expect(aplicaRecupero({ ...base, duplicado_de: 'x' }, [], ahora, cfgR)).toBe(false)
+    expect(aplicaRecupero({ ...base, notas: 'Dijo que no le interesa' }, [], ahora, cfgR)).toBe(false)
+    expect(aplicaRecupero({ ...base, telefono: null }, [], ahora, cfgR)).toBe(false)
+    // Un seguimiento hace menos de 48 h: espera.
+    expect(aplicaRecupero(base, [{ paso: 'p2_antes_24h', created_at: '2026-11-01T20:00:00Z' }], ahora, cfgR)).toBe(false)
+  })
+
+  it('la actividad más reciente manda (bot o primer contacto)', () => {
+    expect(aplicaRecupero({ ...base, bot_ultimo_evento_at: '2026-11-01T10:00:00Z' }, [], ahora, cfgR)).toBe(false)
+  })
+})
+
+describe('canal después del recupero', () => {
+  it('un lead de Instagram o presencial que recibió el recupero sigue por WhatsApp', async () => {
+    const { canalDe } = await import('../../supabase/functions/seguimiento-auto/logica.ts')
+    const nota = '[1/11/2026] Seguimiento automático: recupero por plantilla de WhatsApp enviado'
+    expect(canalDe(lead({ origen: 'instagram', notas: nota }))).toBe('whatsapp')
+    expect(canalDe(lead({ origen: 'presencial', notas: nota }))).toBe('whatsapp')
+    expect(canalDe(lead({ origen: 'presencial' }))).toBeNull()
+    expect(canalDe(lead({ origen: 'instagram' }))).toBe('instagram')
   })
 })

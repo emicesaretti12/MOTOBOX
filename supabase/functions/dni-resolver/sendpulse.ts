@@ -26,6 +26,10 @@ export interface ClienteSendPulse {
   //   Instagram: { contact_id, messages: [{ type: 'text', message: { text } }] }
   // Formato tomado de un cliente de terceros: validarlo en el piloto.
   enviarTexto(contactId: string, texto: string, canal?: CanalSendPulse): Promise<ResultadoAviso>
+  // Plantilla aprobada por Meta a un teléfono (crea el contacto si no existe). Se puede mandar fuera de las 24 h.
+  //   POST whatsapp/contacts/sendTemplateByPhone  { bot_id, phone, template: { name, language: { code } } }
+  // Cada envío lo cobra Meta (mensaje de marketing): se descuenta del saldo de SendPulse.
+  enviarPlantillaPorTelefono(botId: string, telefono: string, plantilla: string, idioma: string): Promise<ResultadoAviso>
 }
 
 interface Dependencias {
@@ -121,6 +125,12 @@ export function crearClienteSendPulse(cfg: ConfigSendPulse, deps: Partial<Depend
     return postConReintentos(`${canal === 'instagram' ? 'instagram' : 'whatsapp'}/contacts/send`, body)
   }
 
+  function enviarPlantillaPorTelefono(botId: string, telefono: string, plantilla: string, idioma: string): Promise<ResultadoAviso> {
+    return postConReintentos('whatsapp/contacts/sendTemplateByPhone', {
+      bot_id: botId, phone: telefono, template: { name: plantilla, language: { code: idioma } },
+    })
+  }
+
   async function postConReintentos(ruta: string, cuerpoPedido: Record<string, unknown>): Promise<ResultadoAviso> {
     const maxIntentos = esperas.length + 1
     let intento = 0
@@ -162,5 +172,5 @@ export function crearClienteSendPulse(cfg: ConfigSendPulse, deps: Partial<Depend
     return { ok: false, intentos: maxIntentos, error: sanitizarError(ultimoError) }
   }
 
-  return { ejecutarFlujo, enviarTexto }
+  return { ejecutarFlujo, enviarTexto, enviarPlantillaPorTelefono }
 }
