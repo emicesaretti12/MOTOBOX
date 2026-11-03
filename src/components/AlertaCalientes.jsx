@@ -4,11 +4,11 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { FORMA_PAGO_LABELS } from '../lib/verificacion'
 import { linkRecupero } from '../lib/recupero'
-import { Flame, MessageCircle, BellRing } from 'lucide-react'
+import { Flame, MessageCircle, BellRing, Check } from 'lucide-react'
 
 // Alerta arriba de todo el CRM: leads calientes (contado, tarjeta, anticipo o BCRA apto) que nadie contactó.
 // Se actualiza sola (tiempo real), suena y manda una notificación del navegador cuando entra uno nuevo.
-// Desaparece cuando el vendedor pasa el lead a "contactado".
+// Desaparece cuando el vendedor toca "Listo" o el lead pasa a negociación / venta / perdido.
 const HORAS = 48
 
 function hace(fecha) {
@@ -16,6 +16,11 @@ function hace(fecha) {
   if (min < 60) return `hace ${min} min`
   const h = Math.round(min / 60)
   return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} d`
+}
+
+function motivo(l) {
+  if (l.caliente_motivo === 'asesor') return 'Pidió hablar con un asesor'
+  return FORMA_PAGO_LABELS[l.forma_pago] || 'BCRA apto'
 }
 
 function sonar() {
@@ -42,9 +47,10 @@ export default function AlertaCalientes() {
     let activo = true
     async function cargar() {
       let q = supabase.from('leads')
-        .select('id, nombre, telefono, modelo_interes, forma_pago, bcra_resultado, caliente_at, estado, origen, vendedor:profiles!vendedor_asignado(full_name)')
+        .select('id, nombre, telefono, notas, modelo_interes, forma_pago, bcra_resultado, caliente_at, caliente_motivo, estado, origen, vendedor:profiles!vendedor_asignado(full_name)')
         .gte('caliente_at', new Date(Date.now() - HORAS * 36e5).toISOString())
-        .eq('estado', 'nuevo')
+        .in('estado', ['nuevo', 'contactado'])
+        .is('caliente_atendido_at', null)
         .is('duplicado_de', null)
         .order('caliente_at', { ascending: false })
         .limit(20)
@@ -58,7 +64,7 @@ export default function AlertaCalientes() {
         sonar()
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           const l = nuevos[0]
-          const n = new Notification('🔥 Lead caliente', { body: `${l.nombre} — ${FORMA_PAGO_LABELS[l.forma_pago] || 'BCRA apto'}. Escribile ya.`, tag: l.id })
+          const n = new Notification('🔥 Lead caliente', { body: `${l.nombre} — ${motivo(l)}. Escribile ya.`, tag: l.id })
           n.onclick = () => { window.focus(); navigate(`/leads/${l.id}`) }
         }
       }
@@ -70,6 +76,14 @@ export default function AlertaCalientes() {
     const reloj = setInterval(cargar, 120000)
     return () => { activo = false; supabase.removeChannel(canal); clearInterval(reloj) }
   }, [profile?.id, isAdmin])
+
+  async function atendido(l) {
+    const nota = `[${new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour12: false })}] CRM: lead caliente atendido por ${profile?.full_name || 'vendedor'}`
+    const { error } = await supabase.from('leads')
+      .update({ caliente_atendido_at: new Date().toISOString(), estado: 'contactado', notas: [l.notas, nota].filter(Boolean).join('\n') })
+      .eq('id', l.id)
+    if (!error) setLeads((prev) => prev.filter((x) => x.id !== l.id))
+  }
 
   if (leads.length === 0) return null
 
@@ -90,15 +104,20 @@ export default function AlertaCalientes() {
             <button className="contactar-nombre" onClick={() => navigate(`/leads/${l.id}`)}>
               {l.nombre}
               <span className="aviso-detalle">
-                {FORMA_PAGO_LABELS[l.forma_pago] || 'BCRA apto'}{l.modelo_interes ? ` · ${l.modelo_interes}` : ''} · {hace(l.caliente_at)}
+                {motivo(l)}{l.modelo_interes ? ` · ${l.modelo_interes}` : ''} · {hace(l.caliente_at)}
                 {isAdmin && ` · ${l.vendedor?.full_name || 'Sin asignar'}`}
               </span>
             </button>
-            {wa && (
-              <a className="btn btn-sm btn-whatsapp-contactar" href={wa} target="_blank" rel="noopener noreferrer">
-                <MessageCircle size={14} /> WhatsApp
-              </a>
-            )}
+            <div className="recuperar-acciones">
+              {wa && (
+                <a className="btn btn-sm btn-whatsapp-contactar" href={wa} target="_blank" rel="noopener noreferrer">
+                  <MessageCircle size={14} /> WhatsApp
+                </a>
+              )}
+              <button className="btn btn-sm btn-secondary" onClick={() => atendido(l)} title="Ya le escribí">
+                <Check size={14} /> Listo
+              </button>
+            </div>
           </div>
         )
       })}

@@ -203,3 +203,10 @@ describe('canal según el último bot que habló', () => {
     expect(canalDe(lead({ origen: 'whatsapp', notas: '' }))).toBe('whatsapp')
   })
 })
+
+describe('pidió asesor', () => {
+  it('no recibe seguimientos automáticos', () => {
+    expect(decidir(lead(), [], AHORA, CFG)).not.toBeNull()
+    expect(decidir(lead({ notas: '[x] Bot: el cliente pidió hablar con un asesor' }), [], AHORA, CFG)).toBeNull()
+  })
+})

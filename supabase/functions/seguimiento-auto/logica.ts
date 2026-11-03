@@ -167,6 +167,9 @@ export function decidir(l: LeadSeguimiento, previos: EnvioPrevio[], ahora: Date,
   // Duplicado (mismo teléfono que otro lead): se le escribe solo al principal.
   if (l.duplicado_de) return null
   if (ESTADOS_FINALES.has(l.estado)) return null
+  // Pidió hablar con un asesor: el bot ya no le contesta, así que no se le manda nada automático (si respondiera,
+  // nadie le contestaría). Lo toma el vendedor desde la alerta de leads calientes del CRM.
+  if (/pidió hablar con un asesor/i.test(l.notas ?? '')) return null
   // Baja = dijo que no le interesa o no califica: solo se le manda el rescate de rechazados.
   // Excepción: el que dejó la calificación a medias queda en baja solo por no tener teléfono; ese sí recibe
   // los recordatorios (p1/p2) para retomar la charla.
