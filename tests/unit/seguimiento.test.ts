@@ -194,3 +194,12 @@ describe('canal después del recupero', () => {
     expect(canalDe(lead({ origen: 'instagram' }))).toBe('instagram')
   })
 })
+
+describe('canal según el último bot que habló', () => {
+  it('un lead de Instagram que siguió por WhatsApp va por WhatsApp', async () => {
+    const { canalDe } = await import('../../supabase/functions/seguimiento-auto/logica.ts')
+    expect(canalDe(lead({ origen: 'instagram', notas: '[1] Bot instagram: forma de pago cuotas\n[2] Bot whatsapp: forma de pago cuotas con DNI' }))).toBe('whatsapp')
+    expect(canalDe(lead({ origen: 'instagram', notas: '[1] Bot whatsapp: x\n[2] Bot instagram: y' }))).toBe('instagram')
+    expect(canalDe(lead({ origen: 'whatsapp', notas: '' }))).toBe('whatsapp')
+  })
+})
