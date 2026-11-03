@@ -133,6 +133,12 @@ export function canalDe(l: LeadSeguimiento): Canal | null {
   // Al que se le mandó el recupero por WhatsApp (sea de Instagram o presencial) y respondió, sigue por WhatsApp:
   // el webhook ya le guardó el contacto de WhatsApp.
   if (/recupero por plantilla de WhatsApp/i.test(l.notas ?? '')) return 'whatsapp'
+  // El contacto guardado es el del último canal por el que habló el bot (un lead de Instagram que siguió por
+  // WhatsApp queda con el contacto de WhatsApp): se usa ese canal para no mandar al contacto equivocado.
+  const notas = l.notas ?? ''
+  const ultimoWa = Math.max(notas.lastIndexOf('Bot whatsapp'), notas.lastIndexOf('WhatsApp:'))
+  const ultimoIg = notas.lastIndexOf('Bot instagram')
+  if (ultimoWa >= 0 || ultimoIg >= 0) return ultimoWa > ultimoIg ? 'whatsapp' : 'instagram'
   if (l.origen === 'instagram') return 'instagram'
   if (l.origen === 'whatsapp') return 'whatsapp'
   return null
