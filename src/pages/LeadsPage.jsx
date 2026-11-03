@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext'
 import { Plus, Search, X, LayoutGrid, List, Download, Phone, MessageCircle, Trash2, Edit, CheckSquare } from 'lucide-react'
 import { ESTADO_DNI_LABELS, BCRA_LABELS, PRIORIDAD_LABELS, FORMA_PAGO_LABELS, detalleBcra, nivelPuntaje } from '../lib/verificacion'
 import ParaContactar from '../components/ParaContactar'
+import ParaRecuperar from '../components/ParaRecuperar'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const ORIGEN_LABELS = { whatsapp: 'WhatsApp', facebook: 'Facebook', instagram: 'Instagram', presencial: 'Presencial', referido: 'Referido', otro: 'Otro' }
@@ -222,6 +223,7 @@ export default function LeadsPage() {
   return (
     <div>
       <ParaContactar leads={leads} isAdmin={isAdmin} />
+      <ParaRecuperar leads={leads} isAdmin={isAdmin} />
 
       {/* Filters */}
       <div className="filters-bar">

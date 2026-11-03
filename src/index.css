@@ -3429,3 +3429,7 @@ body {
 .stat-card-boton:hover { border-color: var(--gray-300, #d4d4d8); }
 .stat-card-boton.activa { border-color: var(--primary, #2563EB); }
 .agenda-lista { margin-bottom: 16px; padding: 12px; }
+.contactar-card.recuperar { box-shadow: inset 3px 0 0 var(--primary), var(--shadow-sm); }
+.contactar-card.recuperar .card-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.contactar-card.recuperar .card-header h3 { color: var(--primary); }
+.recuperar-acciones { display: flex; gap: 6px; flex-shrink: 0; }
