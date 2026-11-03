@@ -1,0 +1,107 @@
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import { FORMA_PAGO_LABELS } from '../lib/verificacion'
+import { linkRecupero } from '../lib/recupero'
+import { Flame, MessageCircle, BellRing } from 'lucide-react'
+
+// Alerta arriba de todo el CRM: leads calientes (contado, tarjeta, anticipo o BCRA apto) que nadie contactó.
+// Se actualiza sola (tiempo real), suena y manda una notificación del navegador cuando entra uno nuevo.
+// Desaparece cuando el vendedor pasa el lead a "contactado".
+const HORAS = 48
+
+function hace(fecha) {
+  const min = Math.max(1, Math.round((Date.now() - new Date(fecha).getTime()) / 60000))
+  if (min < 60) return `hace ${min} min`
+  const h = Math.round(min / 60)
+  return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} d`
+}
+
+function sonar() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    ;[0, 0.25].forEach((t) => {
+      const o = ctx.createOscillator(); const g = ctx.createGain()
+      o.frequency.value = 880; o.connect(g); g.connect(ctx.destination)
+      g.gain.setValueAtTime(0.2, ctx.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.2)
+      o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.2)
+    })
+  } catch { /* sin audio */ }
+}
+
+export default function AlertaCalientes() {
+  const { profile, isAdmin } = useAuth()
+  const navigate = useNavigate()
+  const [leads, setLeads] = useState([])
+  const [permiso, setPermiso] = useState(() => (typeof Notification !== 'undefined' ? Notification.permission : 'denied'))
+  const vistos = useRef(null)
+
+  useEffect(() => {
+    if (!profile?.id) return
+    let activo = true
+    async function cargar() {
+      let q = supabase.from('leads')
+        .select('id, nombre, telefono, modelo_interes, forma_pago, bcra_resultado, caliente_at, estado, origen, vendedor:profiles!vendedor_asignado(full_name)')
+        .gte('caliente_at', new Date(Date.now() - HORAS * 36e5).toISOString())
+        .eq('estado', 'nuevo')
+        .is('duplicado_de', null)
+        .order('caliente_at', { ascending: false })
+        .limit(20)
+      if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
+      const { data } = await q
+      if (!activo || !data) return
+      const nuevos = vistos.current ? data.filter((l) => !vistos.current.has(l.id)) : []
+      vistos.current = new Set(data.map((l) => l.id))
+      setLeads(data)
+      if (nuevos.length) {
+        sonar()
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          const l = nuevos[0]
+          const n = new Notification('🔥 Lead caliente', { body: `${l.nombre} — ${FORMA_PAGO_LABELS[l.forma_pago] || 'BCRA apto'}. Escribile ya.`, tag: l.id })
+          n.onclick = () => { window.focus(); navigate(`/leads/${l.id}`) }
+        }
+      }
+    }
+    cargar()
+    const canal = supabase.channel(`alerta-calientes-${profile.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => cargar())
+      .subscribe()
+    const reloj = setInterval(cargar, 120000)
+    return () => { activo = false; supabase.removeChannel(canal); clearInterval(reloj) }
+  }, [profile?.id, isAdmin])
+
+  if (leads.length === 0) return null
+
+  return (
+    <div className="alerta-calientes">
+      <div className="alerta-calientes-titulo">
+        <Flame size={16} /> {leads.length === 1 ? '1 lead caliente sin contactar' : `${leads.length} leads calientes sin contactar`} — escribiles ya
+        {permiso === 'default' && (
+          <button className="btn-link" onClick={() => Notification.requestPermission().then(setPermiso)}>
+            <BellRing size={14} /> Activar avisos
+          </button>
+        )}
+      </div>
+      {leads.slice(0, 5).map((l) => {
+        const wa = linkRecupero(l)?.split('?')[0]
+        return (
+          <div key={l.id} className="alerta-calientes-fila">
+            <button className="contactar-nombre" onClick={() => navigate(`/leads/${l.id}`)}>
+              {l.nombre}
+              <span className="aviso-detalle">
+                {FORMA_PAGO_LABELS[l.forma_pago] || 'BCRA apto'}{l.modelo_interes ? ` · ${l.modelo_interes}` : ''} · {hace(l.caliente_at)}
+                {isAdmin && ` · ${l.vendedor?.full_name || 'Sin asignar'}`}
+              </span>
+            </button>
+            {wa && (
+              <a className="btn btn-sm btn-whatsapp-contactar" href={wa} target="_blank" rel="noopener noreferrer">
+                <MessageCircle size={14} /> WhatsApp
+              </a>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}

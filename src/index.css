@@ -3433,3 +3433,7 @@ body {
 .contactar-card.recuperar .card-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
 .contactar-card.recuperar .card-header h3 { color: var(--primary); }
 .recuperar-acciones { display: flex; gap: 6px; flex-shrink: 0; }
+.alerta-calientes { margin-bottom: 16px; padding: 12px 14px; border-radius: 10px; background: #fff4ed; border: 1px solid #fdba74; }
+.alerta-calientes-titulo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 600; color: #c2410c; margin-bottom: 6px; }
+.alerta-calientes-titulo .btn-link { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+.alerta-calientes-fila { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid #fed7aa; }

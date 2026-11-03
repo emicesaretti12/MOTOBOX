@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useState } from 'react'
 import { useCrmConfig } from '../hooks/useCrmConfig'
 import { puedeVerificar } from '../lib/verificacion'
+import AlertaCalientes from './AlertaCalientes'
 import {
   LayoutDashboard,
   Users as UsersIcon,
@@ -265,6 +266,7 @@ export default function Layout() {
         </header>
 
         <div className="page-content">
+          <AlertaCalientes />
           <Outlet />
         </div>
       </main>
