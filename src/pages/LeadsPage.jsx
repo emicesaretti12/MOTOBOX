@@ -210,6 +210,7 @@ export default function LeadsPage() {
   }
 
   function exportCSV() {
+    if (!isAdmin) return // solo administradores pueden descargar la base de leads
     const rows = [['Nombre', 'Teléfono', 'Email', 'Modelo', 'Origen', 'Estado', 'Presupuesto', 'Vendedor', 'Cita', 'Creado']]
     filtered.forEach(l => rows.push([l.nombre, l.telefono || '', l.email || '', l.modelo_interes || '', ORIGEN_LABELS[l.origen] || l.origen, STATUS_LABELS[l.estado], l.presupuesto_estimado || '', l.vendedor?.full_name || '', l.fecha_agenda || '', new Date(l.created_at).toLocaleDateString('es-AR')]))
     const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
@@ -267,7 +268,7 @@ export default function LeadsPage() {
           <button className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`} onClick={() => setViewMode('table')}><List size={14} /> Tabla</button>
           <button className={`view-toggle-btn ${viewMode === 'kanban' ? 'active' : ''}`} onClick={() => setViewMode('kanban')}><LayoutGrid size={14} /> Kanban</button>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={exportCSV}><Download size={14} /> CSV</button>
+        {isAdmin && <button className="btn btn-secondary btn-sm" onClick={exportCSV}><Download size={14} /> CSV</button>}
         <span className="results-count">{filtered.length} leads</span>
       </div>
 
