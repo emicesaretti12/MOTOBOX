@@ -3,12 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, traerTodos } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { colaDeHoy, avanceDeHoy, resultadoContacto, MOTIVOS_PERDIDO, INTENTOS_MAXIMOS } from '../lib/hoy'
+import { colaDeHoy, avanceDeHoy, resultadoContacto, comoPaga, asunto, MOTIVOS_PERDIDO, INTENTOS_MAXIMOS } from '../lib/hoy'
 import { linkCaliente } from '../lib/calientes'
-import { FORMA_PAGO_LABELS } from '../lib/verificacion'
 import { MessageCircle, Phone, Check, PhoneOff, CalendarPlus, Clock, XCircle, PartyPopper } from 'lucide-react'
 
-const CAMPOS = 'id, nombre, telefono, notas, modelo_interes, forma_pago, bcra_resultado, estado_dni, estado, origen, puntaje_compra, ' +
+const CAMPOS = 'id, nombre, telefono, notas, modelo_interes, forma_pago, anticipo, usada_detalle, monto_aprobado, bcra_resultado, estado_dni, estado, origen, prioridad, puntaje_compra, updated_at, ' +
   'fecha_agenda, caliente_at, caliente_atendido_at, caliente_motivo, dni_actualizado_at, duplicado_de, ' +
   'proximo_contacto_at, ultimo_contacto_at, contacto_intentos, vendedor_asignado, vendedor:profiles!vendedor_asignado(full_name)'
 const POR_TANDA = 15
@@ -21,16 +20,13 @@ function hace(fecha) {
   return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} d`
 }
 
-function detalle(l, clave) {
-  const partes = []
-  if (clave === 'citas') partes.push(`Cita ${new Date(l.fecha_agenda).toLocaleString('es-AR', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}`)
-  if (l.caliente_motivo === 'asesor') partes.push('Pidió un asesor')
-  if (FORMA_PAGO_LABELS[l.forma_pago]) partes.push(FORMA_PAGO_LABELS[l.forma_pago])
-  if (l.estado_dni === 'aprobado' || l.bcra_resultado === 'apto') partes.push('Crédito aprobado')
-  if (l.modelo_interes) partes.push(l.modelo_interes)
-  if (clave === 'calientes') partes.push(`espera ${hace(l.caliente_at).replace('hace ', '')}`)
-  if (clave === 'enfriando' || clave === 'volver') partes.push(`último contacto ${hace(l.ultimo_contacto_at || l.caliente_atendido_at) || 'sin registrar'}`)
-  return partes.filter(Boolean).join(' · ')
+// Dato de tiempo según la pestaña: cuánto espera, cuándo es la cita o cuándo fue el último contacto.
+function tiempo(l, clave) {
+  if (clave === 'citas') return `Cita ${new Date(l.fecha_agenda).toLocaleString('es-AR', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}`
+  if (clave === 'calientes') return `Espera ${hace(l.caliente_at).replace('hace ', '')}`
+  if (clave === 'aprobados') return l.dni_actualizado_at ? `Aprobado ${hace(l.dni_actualizado_at)}` : ''
+  const ultimo = l.ultimo_contacto_at || l.caliente_atendido_at
+  return ultimo ? `Último contacto ${hace(ultimo)}` : 'Sin contacto registrado'
 }
 
 // Valor por defecto para los selectores de fecha: mañana a las 10:00 (hora del navegador).
@@ -46,6 +42,7 @@ function Fila({ lead, clave, isAdmin, vendedor, onResultado, guardando }) {
   const [fecha, setFecha] = useState(mananaALas10)
   const [motivo, setMotivo] = useState(MOTIVOS_PERDIDO[0])
   const wa = linkCaliente(lead, vendedor)
+  const pago = comoPaga(lead)
   const tel = lead.telefono ? `tel:${String(lead.telefono).replace(/[^\d+]/g, '')}` : null
   const muchosIntentos = (lead.contacto_intentos ?? 0) >= INTENTOS_MAXIMOS
 
@@ -58,10 +55,13 @@ function Fila({ lead, clave, isAdmin, vendedor, onResultado, guardando }) {
     <div className="hoy-fila">
       <div className="hoy-fila-principal">
         <button className="contactar-nombre" onClick={() => navigate(`/leads/${lead.id}`)}>
-          {lead.nombre}
+          <span className="hoy-nombre">
+            {lead.nombre}
+            <span className={`hoy-pago ${pago.tono}`}>{pago.texto}</span>
+          </span>
+          <span className="hoy-asunto">{asunto(lead)}</span>
           <span className="aviso-detalle">
-            {detalle(lead, clave)}
-            {isAdmin && ` · ${lead.vendedor?.full_name || 'Sin asignar'}`}
+            {[tiempo(lead, clave), isAdmin && (lead.vendedor?.full_name || 'Sin asignar')].filter(Boolean).join(' · ')}
           </span>
           {muchosIntentos && <span className="hoy-aviso">Ya van {lead.contacto_intentos} intentos sin respuesta: si no contesta, marcalo como perdido.</span>}
         </button>
@@ -117,7 +117,7 @@ export default function HoyPage() {
       let q = supabase.from('leads').select(CAMPOS)
         .in('estado', ['nuevo', 'contactado', 'en_negociacion'])
         .is('duplicado_de', null)
-        .or('caliente_at.not.is.null,proximo_contacto_at.not.is.null,estado_dni.eq.aprobado,bcra_resultado.eq.apto,fecha_agenda.not.is.null,ultimo_contacto_at.not.is.null')
+        .eq('prioridad', 'alta')
         .order('id')
       if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
       return q

@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { colaDeHoy, resultadoContacto, proximoContacto, inicioDelDia, avanceDeHoy } from '../../src/lib/hoy'
+import { colaDeHoy, resultadoContacto, proximoContacto, inicioDelDia, avanceDeHoy, comoPaga, asunto, formatoPlata } from '../../src/lib/hoy'
 
 // Martes 10/11/2026 15:00 en Córdoba (18:00 UTC).
 const AHORA = new Date('2026-11-10T18:00:00Z')
 const hace = (h) => new Date(AHORA.getTime() - h * 36e5).toISOString()
 const en = (h) => new Date(AHORA.getTime() + h * 36e5).toISOString()
 let n = 0
-const L = (o = {}) => ({ id: `l${++n}`, nombre: 'Ana', estado: 'nuevo', telefono: '3511234567', ...o })
+const L = (o = {}) => ({ id: `l${++n}`, nombre: 'Ana', estado: 'nuevo', prioridad: 'alta', telefono: '3511234567', ...o })
 const claves = (leads) => Object.fromEntries(colaDeHoy(leads, AHORA).grupos.map((g) => [g.clave, g.leads.map((l) => l.id)]))
 
 describe('fechas en hora de Argentina', () => {
@@ -31,6 +31,20 @@ describe('cola de hoy', () => {
     expect(claves([frio, volver, aprobado, caliente, cita])).toEqual({
       citas: [cita.id], calientes: [caliente.id], aprobados: [aprobado.id], volver: [volver.id], enfriando: [frio.id],
     })
+  })
+
+  it('solo entran leads de prioridad alta', () => {
+    const alta = L({ forma_pago: 'contado', caliente_at: hace(5) })
+    const media = L({ prioridad: 'media', estado: 'contactado', proximo_contacto_at: hace(1) })
+    const baja = L({ prioridad: 'baja', fecha_agenda: en(1) })
+    const sin = L({ prioridad: null, estado: 'contactado', proximo_contacto_at: hace(1) })
+    expect(claves([alta, media, baja, sin])).toEqual({ calientes: [alta.id] })
+  })
+
+  it('un lead de prioridad alta contactado y sin novedades figura como enfriándose', () => {
+    const l = L({ estado: 'contactado', updated_at: hace(24 * 5) })
+    const reciente = L({ estado: 'contactado', updated_at: hace(10) })
+    expect(claves([l, reciente])).toEqual({ enfriando: [l.id] })
   })
 
   it('no muestra cerrados, duplicados ni leads sin motivo para contactar', () => {
@@ -115,5 +129,26 @@ describe('resultado de un contacto', () => {
     const despues = { ...lead, ...resultadoContacto(lead, 'escribi', {}, AHORA) }
     expect(colaDeHoy([despues], AHORA).total).toBe(0)
     expect(avanceDeHoy([despues], AHORA).contactados).toBe(1)
+  })
+})
+
+describe('cómo paga y asunto', () => {
+  it('muestra la forma de pago o avisa que no la dijo', () => {
+    expect(comoPaga({ forma_pago: 'contado' }).texto).toBe('Contado')
+    expect(comoPaga({ forma_pago: 'anticipo_cuotas' }).texto).toBe('Anticipo + cuotas')
+    expect(comoPaga({}).texto).toBe('No dijo cómo paga')
+  })
+  it('formatea montos escritos de cualquier forma', () => {
+    expect(formatoPlata('$2.500.000')).toBe('$2.500.000')
+    expect(formatoPlata('600000')).toBe('$600.000')
+    expect(formatoPlata(1000000)).toBe('$1.000.000')
+    expect(formatoPlata('no sé')).toBe('')
+  })
+  it('arma el asunto con moto, anticipo, usada, crédito y pedido de asesor', () => {
+    expect(asunto({ modelo_interes: 'Honda Wave S', anticipo: '600000', usada_detalle: 'Honda Tornado 300' }))
+      .toBe('Quiere Honda Wave S · anticipo $600.000 · entrega usada: Honda Tornado 300')
+    expect(asunto({ estado_dni: 'aprobado', monto_aprobado: 1500000 })).toBe('No dijo qué moto quiere · crédito aprobado por $1.500.000')
+    expect(asunto({ caliente_motivo: 'asesor', notas: 'x\n[6/11] Bot: el cliente pidió hablar con un asesor (El DNI del familiar tampoco pasó: ofrecerle tarjeta)' }))
+      .toBe('No dijo qué moto quiere · pidió un asesor (El DNI del familiar tampoco pasó: ofrecerle tarjeta)')
   })
 })
