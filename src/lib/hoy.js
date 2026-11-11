@@ -47,12 +47,18 @@ export function colaDeHoy(leads, ahora = new Date()) {
   const porPuntaje = (r) => r.sort((a, b) => (b.puntaje_compra ?? 0) - (a.puntaje_compra ?? 0))
 
   const citas = tomar(
-    (l) => ms(l.fecha_agenda) != null && ms(l.fecha_agenda) >= hoy0 - 2 * DIA && ms(l.fecha_agenda) < finHoy,
+    // Si ya lo contactaste hoy, sale de la cola (la cita sigue en la Agenda).
+    (l) => ms(l.fecha_agenda) != null && ms(l.fecha_agenda) >= hoy0 - 2 * DIA && ms(l.fecha_agenda) < finHoy && !(ms(l.ultimo_contacto_at) >= hoy0),
     (r) => r.sort((a, b) => ms(a.fecha_agenda) - ms(b.fecha_agenda)),
   )
   const calientes = tomar(
     (l) => l.caliente_at && !l.caliente_atendido_at && l.estado !== 'en_negociacion' && t - ms(l.caliente_at) < 14 * DIA && !pospuesto(l),
     ordenarCalientes,
+  )
+  // Estaban perdidos y volvieron a escribir en la última semana.
+  const volvieron = tomar(
+    (l) => l.estado === 'nuevo' && ms(l.reingreso_at) != null && t - ms(l.reingreso_at) < 7 * DIA && !pospuesto(l),
+    (r) => r.sort((a, b) => ms(b.reingreso_at) - ms(a.reingreso_at)),
   )
   const aprobados = tomar(
     (l) => l.estado === 'nuevo' && (l.estado_dni === 'aprobado' || l.bcra_resultado === 'apto') && !pospuesto(l),
@@ -71,11 +77,12 @@ export function colaDeHoy(leads, ahora = new Date()) {
   }, porPuntaje)
 
   const grupos = [
-    { clave: 'citas', titulo: 'Citas de hoy y recientes', ayuda: 'Confirmá que vienen. Si no vinieron, reagendá.', leads: citas },
-    { clave: 'calientes', titulo: 'Listos para comprar — sin contactar', ayuda: 'Pagan de contado, con tarjeta o anticipo, o pidieron un asesor. Cada hora que pasa se enfrían.', leads: calientes },
-    { clave: 'aprobados', titulo: 'Crédito aprobado — sin contactar', ayuda: 'Ya pueden sacar la moto en cuotas.', leads: aprobados },
-    { clave: 'volver', titulo: 'Volver a contactar hoy', ayuda: 'Quedaste en escribirles de nuevo.', leads: volver },
-    { clave: 'enfriando', titulo: 'Se están enfriando', ayuda: 'Interesados que ya contactaste y llevan más de 2 días sin novedades.', leads: enfriando },
+    { clave: 'citas', titulo: 'Citas', ayuda: 'Citas de hoy y de los últimos 2 días. Confirmá que vienen; si no vinieron, reagendá.', leads: citas },
+    { clave: 'calientes', titulo: 'Listos para comprar', ayuda: 'Pagan de contado, con tarjeta o anticipo, o pidieron un asesor. Nadie los contactó todavía.', leads: calientes },
+    { clave: 'volvieron', titulo: 'Volvieron a escribir', ayuda: 'Estaban perdidos y escribieron de nuevo esta semana.', leads: volvieron },
+    { clave: 'aprobados', titulo: 'Crédito aprobado', ayuda: 'Ya pueden sacar la moto en cuotas y nadie los contactó.', leads: aprobados },
+    { clave: 'volver', titulo: 'Seguimientos de hoy', ayuda: 'Quedaste en escribirles de nuevo hoy.', leads: volver },
+    { clave: 'enfriando', titulo: 'Se enfrían', ayuda: 'Interesados que ya contactaste y llevan más de 2 días sin novedades.', leads: enfriando },
   ].filter((g) => g.leads.length > 0)
 
   return { grupos, total: grupos.reduce((n, g) => n + g.leads.length, 0) }

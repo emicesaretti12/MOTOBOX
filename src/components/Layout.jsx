@@ -78,6 +78,33 @@ export default function Layout() {
     return null
   }
 
+  // Menú ordenado por tarea: primero vender, después el negocio, al final la administración.
+  const secciones = [
+    { titulo: 'Vender', links: [
+      { to: '/hoy', texto: 'Para vender hoy', Icono: Target },
+      { to: '/leads', texto: 'Leads', Icono: UsersIcon },
+      { to: '/agenda', texto: 'Agenda', Icono: Calendar },
+      verVerificacion && { to: '/verificacion', texto: 'Verificación DNI', Icono: ShieldCheck },
+    ] },
+    { titulo: 'Negocio', links: [
+      { to: '/ventas', texto: 'Ventas', Icono: DollarSign },
+      { to: '/clientes', texto: 'Clientes', Icono: Briefcase },
+      { to: '/inventario', texto: 'Inventario', Icono: Package },
+      { to: '/usados', texto: 'Usados', Icono: Gauge },
+    ] },
+    { titulo: 'Resultados', links: [
+      { to: '/', texto: 'Dashboard', Icono: LayoutDashboard, end: true },
+      isAdmin && { to: '/monitor', texto: 'Monitor de vendedores', Icono: Activity },
+      isAdmin && crmConfig?.disponible && { to: '/metricas', texto: 'Métricas DNI', Icono: BarChart3 },
+    ] },
+    isAdmin && { titulo: 'Administración', links: [
+      { to: '/usuarios', texto: 'Usuarios', Icono: UserPlus },
+      { to: '/sorteo', texto: 'Sorteo', Icono: Ticket },
+      { to: '/web-config', texto: 'Configurar web', Icono: Settings },
+    ] },
+    { titulo: 'Cuenta', links: [{ to: '/perfil', texto: 'Mi perfil', Icono: Settings }] },
+  ].filter(Boolean).map((sec) => ({ ...sec, links: sec.links.filter(Boolean) }))
+
   const initials = profile?.full_name
     ? profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : '??'
@@ -98,154 +125,23 @@ export default function Layout() {
         </div>
 
         <nav className="sidebar-nav">
-          <span className="sidebar-section-label">Principal</span>
-
-          <NavLink
-            to="/hoy"
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <Target size={18} />
-            Para vender hoy
-          </NavLink>
-
-          <NavLink
-            to="/inventario"
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <Package size={18} />
-            Inventario
-          </NavLink>
-
-          <NavLink
-            to="/usados"
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <Gauge size={18} />
-            Usados exclusivos
-          </NavLink>
-
-          <NavLink
-            to="/ventas"
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <DollarSign size={18} />
-            Ventas
-          </NavLink>
-
-          <NavLink
-            to="/clientes"
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <Briefcase size={18} />
-            Clientes
-          </NavLink>
-
-          <NavLink
-            to="/" end
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <LayoutDashboard size={18} />
-            Dashboard
-          </NavLink>
-
-          <NavLink
-            to="/leads"
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <UsersIcon size={18} />
-            Leads
-          </NavLink>
-
-          {verVerificacion && (
-            <NavLink
-              to="/verificacion"
-              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              <ShieldCheck size={18} />
-              Verificación DNI
-            </NavLink>
-          )}
-
-          <NavLink
-            to="/agenda"
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <Calendar size={18} />
-            Agenda
-          </NavLink>
-
-          {isAdmin && (
-            <>
-              <span className="sidebar-section-label">Administración</span>
-
-              {crmConfig?.disponible && (
+          {secciones.map((sec) => (
+            <div key={sec.titulo} className="sidebar-seccion">
+              <span className="sidebar-section-label">{sec.titulo}</span>
+              {sec.links.map(({ to, texto, Icono, end }) => (
                 <NavLink
-                  to="/metricas"
+                  key={to}
+                  to={to}
+                  end={end}
                   className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
                   onClick={() => setSidebarOpen(false)}
                 >
-                  <BarChart3 size={18} />
-                  Métricas DNI
+                  <Icono size={18} />
+                  {texto}
                 </NavLink>
-              )}
-
-              <NavLink
-                to="/monitor"
-                className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <Activity size={18} />
-                Monitor Vendedores
-              </NavLink>
-
-              <NavLink
-                to="/usuarios"
-                className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <UserPlus size={18} />
-                Usuarios
-              </NavLink>
-
-              <NavLink
-                to="/sorteo"
-                className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <Ticket size={18} />
-                Sorteo
-              </NavLink>
-
-              <NavLink
-                to="/web-config"
-                className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <Settings size={18} />
-                Configurar Web
-              </NavLink>
-            </>
-          )}
-
-          <span className="sidebar-section-label">Cuenta</span>
-
-          <NavLink
-            to="/perfil"
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <Settings size={18} />
-            Mi Perfil
-          </NavLink>
+              ))}
+            </div>
+          ))}
         </nav>
 
         <div className="sidebar-footer">
