@@ -22,6 +22,7 @@ import {
   Briefcase,
   ShieldCheck,
   BarChart3,
+  Target,
 } from 'lucide-react'
 
 export default function Layout() {
@@ -34,6 +35,7 @@ export default function Layout() {
   function getPageTitle() {
     const path = location.pathname
     if (path === '/') return 'Dashboard'
+    if (path === '/hoy') return 'Para vender hoy'
     if (path === '/leads') return 'Gestión de Leads'
     if (path.startsWith('/leads/')) return 'Detalle del Lead'
     if (path === '/agenda') return 'Agenda'
@@ -97,6 +99,15 @@ export default function Layout() {
 
         <nav className="sidebar-nav">
           <span className="sidebar-section-label">Principal</span>
+
+          <NavLink
+            to="/hoy"
+            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            <Target size={18} />
+            Para vender hoy
+          </NavLink>
 
           <NavLink
             to="/inventario"
