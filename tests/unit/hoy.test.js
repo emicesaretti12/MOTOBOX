@@ -33,6 +33,12 @@ describe('cola de hoy', () => {
     })
   })
 
+  it('los que estaban perdidos y volvieron a escribir tienen su grupo', () => {
+    const volvio = L({ reingreso_at: hace(20) })
+    const hacemucho = L({ reingreso_at: hace(24 * 10) })
+    expect(claves([volvio, hacemucho])).toEqual({ volvieron: [volvio.id] })
+  })
+
   it('no muestra cerrados, duplicados ni leads sin motivo para contactar', () => {
     expect(colaDeHoy([
       L({ estado: 'perdido', caliente_at: hace(2) }),
@@ -52,6 +58,12 @@ describe('cola de hoy', () => {
     const vieja = L({ estado: 'contactado', fecha_agenda: hace(24 * 20) })
     const ayer = L({ estado: 'contactado', fecha_agenda: hace(26) })
     expect(claves([vieja, ayer])).toEqual({ citas: [ayer.id] })
+  })
+
+  it('una cita ya confirmada hoy sale de la cola', () => {
+    const cita = L({ estado: 'en_negociacion', fecha_agenda: en(2) })
+    expect(claves([cita])).toEqual({ citas: [cita.id] })
+    expect(colaDeHoy([{ ...cita, ...resultadoContacto(cita, 'escribi', {}, AHORA) }], AHORA).total).toBe(0)
   })
 
   it('calientes: contado primero; los de más de 14 días ya no entran', () => {

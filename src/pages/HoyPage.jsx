@@ -9,9 +9,9 @@ import { FORMA_PAGO_LABELS } from '../lib/verificacion'
 import { MessageCircle, Phone, Check, PhoneOff, CalendarPlus, Clock, XCircle, PartyPopper } from 'lucide-react'
 
 const CAMPOS = 'id, nombre, telefono, notas, modelo_interes, forma_pago, bcra_resultado, estado_dni, estado, origen, puntaje_compra, ' +
-  'fecha_agenda, caliente_at, caliente_atendido_at, caliente_motivo, dni_actualizado_at, duplicado_de, ' +
+  'fecha_agenda, caliente_at, caliente_atendido_at, caliente_motivo, dni_actualizado_at, duplicado_de, reingreso_at, ' +
   'proximo_contacto_at, ultimo_contacto_at, contacto_intentos, vendedor_asignado, vendedor:profiles!vendedor_asignado(full_name)'
-const POR_GRUPO = 8
+const POR_TANDA = 15
 
 function hace(fecha) {
   if (!fecha) return ''
@@ -28,7 +28,8 @@ function detalle(l, clave) {
   if (FORMA_PAGO_LABELS[l.forma_pago]) partes.push(FORMA_PAGO_LABELS[l.forma_pago])
   if (l.estado_dni === 'aprobado' || l.bcra_resultado === 'apto') partes.push('Crédito aprobado')
   if (l.modelo_interes) partes.push(l.modelo_interes)
-  if (clave === 'calientes') partes.push(hace(l.caliente_at))
+  if (clave === 'calientes') partes.push(`espera ${hace(l.caliente_at).replace('hace ', '')}`)
+  if (clave === 'volvieron') partes.push(`escribió ${hace(l.reingreso_at)}`)
   if (clave === 'enfriando' || clave === 'volver') partes.push(`último contacto ${hace(l.ultimo_contacto_at || l.caliente_atendido_at) || 'sin registrar'}`)
   return partes.filter(Boolean).join(' · ')
 }
@@ -41,6 +42,7 @@ function mananaALas10() {
 
 function Fila({ lead, clave, isAdmin, vendedor, onResultado, guardando }) {
   const navigate = useNavigate()
+  const [abierta, setAbierta] = useState(false) // muestra "¿Cómo te fue?" recién después de contactar
   const [modo, setModo] = useState(null) // 'visita' | 'posponer' | 'perdido'
   const [fecha, setFecha] = useState(mananaALas10)
   const [motivo, setMotivo] = useState(MOTIVOS_PERDIDO[0])
@@ -65,28 +67,29 @@ function Fila({ lead, clave, isAdmin, vendedor, onResultado, guardando }) {
           {muchosIntentos && <span className="hoy-aviso">Ya van {lead.contacto_intentos} intentos sin respuesta: si no contesta, marcalo como perdido.</span>}
         </button>
         <div className="hoy-contacto">
-          {wa && <a className="btn btn-sm btn-whatsapp-contactar" href={wa} target="_blank" rel="noopener noreferrer"><MessageCircle size={14} /> WhatsApp</a>}
-          {tel && <a className="btn btn-sm btn-secondary" href={tel}><Phone size={14} /> Llamar</a>}
+          {wa && <a className="btn btn-sm btn-whatsapp-contactar" href={wa} target="_blank" rel="noopener noreferrer" onClick={() => setAbierta(true)}><MessageCircle size={14} /> WhatsApp</a>}
+          {tel && <a className="btn btn-sm btn-secondary" href={tel} onClick={() => setAbierta(true)}><Phone size={14} /> Llamar</a>}
+          {!abierta && <button className="btn btn-sm btn-secondary" onClick={() => setAbierta(true)}>Anotar resultado</button>}
         </div>
       </div>
 
-      <div className="hoy-resultados">
+      {abierta && <div className="hoy-resultados">
         <span className="hoy-resultados-label">¿Cómo te fue?</span>
         <button className="btn btn-sm btn-secondary" disabled={guardando} onClick={() => confirmar('escribi')}><Check size={14} /> Le escribí</button>
         <button className="btn btn-sm btn-secondary" disabled={guardando} onClick={() => confirmar('no_contesta')}><PhoneOff size={14} /> No contesta</button>
         <button className={`btn btn-sm ${modo === 'visita' ? 'btn-primary' : 'btn-secondary'}`} disabled={guardando} onClick={() => setModo(modo === 'visita' ? null : 'visita')}><CalendarPlus size={14} /> Agendó visita</button>
         <button className={`btn btn-sm ${modo === 'posponer' ? 'btn-primary' : 'btn-secondary'}`} disabled={guardando} onClick={() => setModo(modo === 'posponer' ? null : 'posponer')}><Clock size={14} /> Más adelante</button>
         <button className={`btn btn-sm ${modo === 'perdido' ? 'btn-primary' : 'btn-secondary'}`} disabled={guardando} onClick={() => setModo(modo === 'perdido' ? null : 'perdido')}><XCircle size={14} /> Perdido</button>
-      </div>
+      </div>}
 
-      {(modo === 'visita' || modo === 'posponer') && (
+      {abierta && (modo === 'visita' || modo === 'posponer') && (
         <div className="hoy-extra">
           <label className="form-label" htmlFor={`fecha-${lead.id}`}>{modo === 'visita' ? '¿Qué día y a qué hora viene?' : '¿Cuándo le volvés a escribir?'}</label>
           <input id={`fecha-${lead.id}`} className="form-input" type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} />
           <button className="btn btn-sm btn-primary" disabled={guardando || !fecha} onClick={() => confirmar(modo, { fecha: new Date(fecha).toISOString() })}>Guardar</button>
         </div>
       )}
-      {modo === 'perdido' && (
+      {abierta && modo === 'perdido' && (
         <div className="hoy-extra">
           <label className="form-label" htmlFor={`motivo-${lead.id}`}>¿Por qué se perdió?</label>
           <select id={`motivo-${lead.id}`} className="form-input" value={motivo} onChange={(e) => setMotivo(e.target.value)}>
@@ -105,7 +108,8 @@ export default function HoyPage() {
   const [leads, setLeads] = useState(null)
   const [error, setError] = useState(null)
   const [guardando, setGuardando] = useState(null)
-  const [abiertos, setAbiertos] = useState({})
+  const [pestana, setPestana] = useState(null)
+  const [mostrar, setMostrar] = useState(POR_TANDA)
   const [soloMios, setSoloMios] = useState(false)
 
   const cargar = useCallback(async () => {
@@ -114,7 +118,7 @@ export default function HoyPage() {
       let q = supabase.from('leads').select(CAMPOS)
         .in('estado', ['nuevo', 'contactado', 'en_negociacion'])
         .is('duplicado_de', null)
-        .or('caliente_at.not.is.null,proximo_contacto_at.not.is.null,estado_dni.eq.aprobado,bcra_resultado.eq.apto,fecha_agenda.not.is.null,ultimo_contacto_at.not.is.null')
+        .or('caliente_at.not.is.null,proximo_contacto_at.not.is.null,estado_dni.eq.aprobado,bcra_resultado.eq.apto,fecha_agenda.not.is.null,ultimo_contacto_at.not.is.null,reingreso_at.not.is.null')
         .order('id')
       if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
       return q
@@ -133,6 +137,8 @@ export default function HoyPage() {
   const visibles = useMemo(() => (soloMios ? (leads || []).filter((l) => l.vendedor_asignado === profile?.id) : leads || []), [leads, soloMios, profile?.id])
   const cola = useMemo(() => colaDeHoy(visibles), [visibles])
   const avance = useMemo(() => avanceDeHoy(visibles), [visibles])
+  // Pestaña elegida; si se vació, pasa sola a la primera con leads.
+  const grupo = cola.grupos.find((g) => g.clave === pestana) || cola.grupos[0] || null
 
   async function registrar(lead, tipo, datos) {
     let cambios
@@ -166,28 +172,37 @@ export default function HoyPage() {
         <div className="card"><div className="card-body hoy-vacio"><PartyPopper size={22} /> No queda nadie por contactar. Cuando entre un lead nuevo o toque un seguimiento, aparece acá.</div></div>
       )}
 
-      {cola.grupos.map((g) => {
-        const todos = abiertos[g.clave]
-        const lista = todos ? g.leads : g.leads.slice(0, POR_GRUPO)
-        return (
-          <div key={g.clave} className={`card hoy-grupo ${g.clave}`}>
-            <div className="card-header">
-              <h3>{g.titulo} ({g.leads.length})</h3>
-              <span className="aviso-detalle">{g.ayuda}</span>
-            </div>
+      {grupo && (
+        <>
+          <div className="hoy-pestanas" role="tablist">
+            {cola.grupos.map((g) => (
+              <button
+                key={g.clave}
+                role="tab"
+                aria-selected={g.clave === grupo.clave}
+                className={`hoy-pestana ${g.clave === grupo.clave ? 'activa' : ''}`}
+                onClick={() => { setPestana(g.clave); setMostrar(POR_TANDA) }}
+              >
+                {g.titulo} <span className="hoy-pestana-n">{g.leads.length}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="card hoy-grupo">
             <div className="card-body">
-              {lista.map((l) => (
-                <Fila key={l.id} lead={l} clave={g.clave} isAdmin={isAdmin} vendedor={profile?.full_name} onResultado={registrar} guardando={guardando === l.id} />
+              <p className="aviso-detalle hoy-ayuda">{grupo.ayuda}</p>
+              {grupo.leads.slice(0, mostrar).map((l) => (
+                <Fila key={l.id} lead={l} clave={grupo.clave} isAdmin={isAdmin} vendedor={profile?.full_name} onResultado={registrar} guardando={guardando === l.id} />
               ))}
-              {g.leads.length > POR_GRUPO && (
-                <button className="btn-link hoy-mas" onClick={() => setAbiertos((p) => ({ ...p, [g.clave]: !todos }))}>
-                  {todos ? 'Ver menos' : `Ver los ${g.leads.length}`}
+              {grupo.leads.length > mostrar && (
+                <button className="btn-link hoy-mas" onClick={() => setMostrar((n) => n + POR_TANDA)}>
+                  Ver más ({grupo.leads.length - mostrar} restantes)
                 </button>
               )}
             </div>
           </div>
-        )
-      })}
+        </>
+      )}
     </div>
   )
 }
