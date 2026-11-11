@@ -3480,3 +3480,10 @@ body {
 .hoy-pestana-n { font-size: 0.75rem; padding: 1px 7px; border-radius: 999px; background: var(--gray-100); color: var(--gray-700, #3a3a3c); }
 .hoy-pestana.activa .hoy-pestana-n { background: rgba(255, 255, 255, 0.25); color: #fff; }
 .hoy-ayuda { margin: 0 0 4px; }
+.hoy-nombre { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.hoy-pago { font-size: 0.72rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.hoy-pago.verde { background: rgba(22, 163, 74, 0.12); color: #15803d; }
+.hoy-pago.azul { background: rgba(0, 122, 255, 0.12); color: #0056b3; }
+.hoy-pago.violeta { background: rgba(124, 58, 237, 0.12); color: #6d28d9; }
+.hoy-pago.gris { background: var(--gray-100); color: var(--gray-600, #636366); }
+.hoy-asunto { font-size: 0.85rem; font-weight: 400; color: var(--gray-800, #2c2c2e); }

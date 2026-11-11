@@ -36,7 +36,8 @@ export function colaDeHoy(leads, ahora = new Date()) {
   const t = new Date(ahora).getTime()
   const hoy0 = inicioDelDia(ahora)
   const finHoy = hoy0 + DIA
-  const abiertos = (leads || []).filter((l) => ABIERTOS.includes(l.estado) && !l.duplicado_de)
+  // Solo prioridad alta: la base marca así a todo lead listo para comprar (migración 025).
+  const abiertos = (leads || []).filter((l) => ABIERTOS.includes(l.estado) && !l.duplicado_de && l.prioridad === 'alta')
   const pospuesto = (l) => ms(l.proximo_contacto_at) != null && ms(l.proximo_contacto_at) >= finHoy
   const usados = new Set()
   const tomar = (filtro, orden) => {
@@ -63,11 +64,11 @@ export function colaDeHoy(leads, ahora = new Date()) {
     (l) => ms(l.proximo_contacto_at) != null && ms(l.proximo_contacto_at) < finHoy,
     (r) => r.sort((a, b) => Number(esCaliente(b)) - Number(esCaliente(a)) || ms(a.proximo_contacto_at) - ms(b.proximo_contacto_at)),
   )
-  // Calientes ya contactados que quedaron sin próximo paso: se enfrían si nadie insiste.
+  // Prioridad alta ya contactados que quedaron sin próximo paso: se enfrían si nadie insiste.
   const enfriando = tomar((l) => {
-    if (!esCaliente(l) || l.estado === 'nuevo' || l.proximo_contacto_at) return false
+    if (l.estado === 'nuevo' || l.proximo_contacto_at) return false
     if (ms(l.fecha_agenda) != null && ms(l.fecha_agenda) >= finHoy) return false
-    const ultimo = Math.max(ms(l.ultimo_contacto_at) ?? 0, ms(l.caliente_atendido_at) ?? 0, ms(l.caliente_at) ?? 0, ms(l.dni_actualizado_at) ?? 0)
+    const ultimo = Math.max(ms(l.ultimo_contacto_at) ?? 0, ms(l.caliente_atendido_at) ?? 0, ms(l.caliente_at) ?? 0, ms(l.dni_actualizado_at) ?? 0) || (ms(l.updated_at) ?? 0)
     return ultimo > 0 && t - ultimo > 2 * DIA && t - ultimo < 30 * DIA
   }, porPuntaje)
 
@@ -80,6 +81,41 @@ export function colaDeHoy(leads, ahora = new Date()) {
   ].filter((g) => g.leads.length > 0)
 
   return { grupos, total: grupos.reduce((n, g) => n + g.leads.length, 0) }
+}
+
+// Cómo paga: lo primero que el vendedor necesita saber antes de escribir.
+const PAGOS = {
+  contado: { texto: 'Contado', tono: 'verde' },
+  tarjeta: { texto: 'Tarjeta de crédito', tono: 'azul' },
+  anticipo_cuotas: { texto: 'Anticipo + cuotas', tono: 'violeta' },
+  cuotas: { texto: 'Cuotas con DNI', tono: 'gris' },
+}
+export function comoPaga(l) {
+  return PAGOS[l.forma_pago] || { texto: 'No dijo cómo paga', tono: 'gris' }
+}
+
+export function formatoPlata(valor) {
+  const n = Number(String(valor ?? '').replace(/[^\d]/g, ''))
+  return n > 0 ? `$${n.toLocaleString('es-AR')}` : ''
+}
+
+// Asunto del lead en una línea: qué moto quiere y con qué cuenta (anticipo, usada, crédito, pedido de asesor).
+export function asunto(l) {
+  const partes = []
+  const modelo = String(l.modelo_interes || '').trim()
+  partes.push(modelo ? `Quiere ${modelo}` : 'No dijo qué moto quiere')
+  const anticipo = formatoPlata(l.anticipo)
+  if (anticipo) partes.push(`anticipo ${anticipo}`)
+  if (String(l.usada_detalle || '').trim()) partes.push(`entrega usada: ${String(l.usada_detalle).trim()}`)
+  if (l.estado_dni === 'aprobado' || l.bcra_resultado === 'apto') {
+    const monto = formatoPlata(l.monto_aprobado)
+    partes.push(monto ? `crédito aprobado por ${monto}` : 'crédito aprobado')
+  }
+  if (l.caliente_motivo === 'asesor') {
+    const motivo = /pidió hablar con un asesor \(([^)\n]+)\)/i.exec(l.notas || '')
+    partes.push(motivo ? `pidió un asesor (${motivo[1]})` : 'pidió hablar con un asesor')
+  }
+  return partes.join(' · ')
 }
 
 // Lo que el vendedor ya hizo hoy (para la barra de avance).
