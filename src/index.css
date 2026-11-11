@@ -3438,3 +3438,38 @@ body {
 .alerta-calientes-titulo .btn-link { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
 .alerta-calientes-mas { display: block; margin: 8px auto 0; font-weight: 600; }
 .alerta-calientes-fila { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid #fed7aa; }
+
+/* Para vender hoy: cola de trabajo del vendedor */
+.hoy { display: grid; gap: 16px; }
+.hoy-resumen { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.hoy-numero { display: grid; gap: 2px; padding: 10px 16px; border-radius: 10px; background: var(--white, #fff); border: 1px solid var(--gray-200); min-width: 130px; }
+.hoy-numero strong { font-size: 1.5rem; line-height: 1.1; color: var(--gray-900); }
+.hoy-numero span { font-size: 0.75rem; color: var(--gray-500); }
+.hoy-numero.pendientes { border-color: #fdba74; background: #fff4ed; }
+.hoy-numero.pendientes strong { color: #c2410c; }
+.hoy-filtro { margin-left: auto; }
+.hoy-grupo .card-header { display: grid; gap: 2px; }
+.hoy-grupo.calientes .card-header h3 { color: #c2410c; }
+.hoy-grupo.aprobados .card-header h3 { color: var(--success); }
+.hoy-grupo.citas .card-header h3 { color: var(--primary); }
+.hoy-fila { padding: 12px 0; border-bottom: 1px solid var(--gray-100); display: grid; gap: 8px; }
+.hoy-fila:last-of-type { border-bottom: none; }
+.hoy-fila-principal { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.hoy-contacto { display: flex; gap: 6px; flex-shrink: 0; }
+.hoy-resultados { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.hoy-resultados-label { font-size: 0.75rem; color: var(--gray-500); margin-right: 2px; }
+.hoy-resultados .btn, .hoy-contacto .btn { display: inline-flex; align-items: center; gap: 4px; }
+.hoy-extra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--gray-100); }
+.hoy-extra .form-label { margin: 0; }
+.hoy-extra .form-input { width: auto; min-width: 200px; }
+.hoy-aviso { font-size: 0.75rem; color: #b45309; font-weight: 500; }
+.hoy-mas { display: block; margin: 8px auto 0; font-weight: 600; }
+.hoy-vacio { display: flex; align-items: center; gap: 10px; color: var(--gray-600); }
+@media (max-width: 640px) {
+  .hoy-fila-principal { flex-direction: column; }
+  .hoy-contacto { width: 100%; }
+  .hoy-contacto .btn { flex: 1; justify-content: center; min-height: 40px; }
+  .hoy-resultados .btn { min-height: 38px; }
+  .hoy-extra .form-input { width: 100%; }
+  .hoy-filtro { margin-left: 0; }
+}
