@@ -55,11 +55,6 @@ export function colaDeHoy(leads, ahora = new Date()) {
     (l) => l.caliente_at && !l.caliente_atendido_at && l.estado !== 'en_negociacion' && t - ms(l.caliente_at) < 14 * DIA && !pospuesto(l),
     ordenarCalientes,
   )
-  // Estaban perdidos y volvieron a escribir en la última semana.
-  const volvieron = tomar(
-    (l) => l.estado === 'nuevo' && ms(l.reingreso_at) != null && t - ms(l.reingreso_at) < 7 * DIA && !pospuesto(l),
-    (r) => r.sort((a, b) => ms(b.reingreso_at) - ms(a.reingreso_at)),
-  )
   const aprobados = tomar(
     (l) => l.estado === 'nuevo' && (l.estado_dni === 'aprobado' || l.bcra_resultado === 'apto') && !pospuesto(l),
     porPuntaje,
@@ -79,7 +74,6 @@ export function colaDeHoy(leads, ahora = new Date()) {
   const grupos = [
     { clave: 'citas', titulo: 'Citas', ayuda: 'Citas de hoy y de los últimos 2 días. Confirmá que vienen; si no vinieron, reagendá.', leads: citas },
     { clave: 'calientes', titulo: 'Listos para comprar', ayuda: 'Pagan de contado, con tarjeta o anticipo, o pidieron un asesor. Nadie los contactó todavía.', leads: calientes },
-    { clave: 'volvieron', titulo: 'Volvieron a escribir', ayuda: 'Estaban perdidos y escribieron de nuevo esta semana.', leads: volvieron },
     { clave: 'aprobados', titulo: 'Crédito aprobado', ayuda: 'Ya pueden sacar la moto en cuotas y nadie los contactó.', leads: aprobados },
     { clave: 'volver', titulo: 'Seguimientos de hoy', ayuda: 'Quedaste en escribirles de nuevo hoy.', leads: volver },
     { clave: 'enfriando', titulo: 'Se enfrían', ayuda: 'Interesados que ya contactaste y llevan más de 2 días sin novedades.', leads: enfriando },
