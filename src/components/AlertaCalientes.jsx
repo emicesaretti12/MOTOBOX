@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { FORMA_PAGO_LABELS } from '../lib/verificacion'
-import { linkRecupero } from '../lib/recupero'
+import { ordenarCalientes, linkCaliente } from '../lib/calientes'
 import { Flame, MessageCircle, BellRing, Check } from 'lucide-react'
 
 // Alerta arriba de todo el CRM: leads calientes (contado, tarjeta, anticipo o BCRA apto) que nadie contactó.
 // Se actualiza sola (tiempo real), suena y manda una notificación del navegador cuando entra uno nuevo.
-// Desaparece cuando el vendedor toca "Listo" o el lead pasa a negociación / venta / perdido.
-const HORAS = 48
+// Desaparece cuando el vendedor toca "Listo" o el lead cambia de estado. Un lead sin atender sigue
+// en la lista hasta 14 días: antes se ocultaba a las 48 h y se perdía sin que nadie le escribiera.
+const HORAS = 14 * 24
+const VISIBLES = 5
 
 function hace(fecha) {
   const min = Math.max(1, Math.round((Date.now() - new Date(fecha).getTime()) / 60000))
@@ -41,6 +43,7 @@ export default function AlertaCalientes() {
   const [leads, setLeads] = useState([])
   const [permiso, setPermiso] = useState(() => (typeof Notification !== 'undefined' ? Notification.permission : 'denied'))
   const vistos = useRef(null)
+  const [verTodos, setVerTodos] = useState(false)
 
   useEffect(() => {
     if (!profile?.id) return
@@ -53,13 +56,13 @@ export default function AlertaCalientes() {
         .is('caliente_atendido_at', null)
         .is('duplicado_de', null)
         .order('caliente_at', { ascending: false })
-        .limit(20)
+        .limit(200)
       if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
       const { data } = await q
       if (!activo || !data) return
       const nuevos = vistos.current ? data.filter((l) => !vistos.current.has(l.id)) : []
       vistos.current = new Set(data.map((l) => l.id))
-      setLeads(data)
+      setLeads(ordenarCalientes(data))
       if (nuevos.length) {
         sonar()
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -97,8 +100,8 @@ export default function AlertaCalientes() {
           </button>
         )}
       </div>
-      {leads.slice(0, 5).map((l) => {
-        const wa = linkRecupero(l)?.split('?')[0]
+      {(verTodos ? leads : leads.slice(0, VISIBLES)).map((l) => {
+        const wa = linkCaliente(l, profile?.full_name)
         return (
           <div key={l.id} className="alerta-calientes-fila">
             <button className="contactar-nombre" onClick={() => navigate(`/leads/${l.id}`)}>
@@ -121,6 +124,11 @@ export default function AlertaCalientes() {
           </div>
         )
       })}
+      {leads.length > VISIBLES && (
+        <button className="btn-link alerta-calientes-mas" onClick={() => setVerTodos((v) => !v)}>
+          {verTodos ? 'Ver menos' : `Ver los ${leads.length} leads`}
+        </button>
+      )}
     </div>
   )
 }
