@@ -33,12 +33,6 @@ describe('cola de hoy', () => {
     })
   })
 
-  it('los que estaban perdidos y volvieron a escribir tienen su grupo', () => {
-    const volvio = L({ reingreso_at: hace(20) })
-    const hacemucho = L({ reingreso_at: hace(24 * 10) })
-    expect(claves([volvio, hacemucho])).toEqual({ volvieron: [volvio.id] })
-  })
-
   it('no muestra cerrados, duplicados ni leads sin motivo para contactar', () => {
     expect(colaDeHoy([
       L({ estado: 'perdido', caliente_at: hace(2) }),

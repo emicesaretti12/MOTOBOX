@@ -9,7 +9,7 @@ import { FORMA_PAGO_LABELS } from '../lib/verificacion'
 import { MessageCircle, Phone, Check, PhoneOff, CalendarPlus, Clock, XCircle, PartyPopper } from 'lucide-react'
 
 const CAMPOS = 'id, nombre, telefono, notas, modelo_interes, forma_pago, bcra_resultado, estado_dni, estado, origen, puntaje_compra, ' +
-  'fecha_agenda, caliente_at, caliente_atendido_at, caliente_motivo, dni_actualizado_at, duplicado_de, reingreso_at, ' +
+  'fecha_agenda, caliente_at, caliente_atendido_at, caliente_motivo, dni_actualizado_at, duplicado_de, ' +
   'proximo_contacto_at, ultimo_contacto_at, contacto_intentos, vendedor_asignado, vendedor:profiles!vendedor_asignado(full_name)'
 const POR_TANDA = 15
 
@@ -29,7 +29,6 @@ function detalle(l, clave) {
   if (l.estado_dni === 'aprobado' || l.bcra_resultado === 'apto') partes.push('Crédito aprobado')
   if (l.modelo_interes) partes.push(l.modelo_interes)
   if (clave === 'calientes') partes.push(`espera ${hace(l.caliente_at).replace('hace ', '')}`)
-  if (clave === 'volvieron') partes.push(`escribió ${hace(l.reingreso_at)}`)
   if (clave === 'enfriando' || clave === 'volver') partes.push(`último contacto ${hace(l.ultimo_contacto_at || l.caliente_atendido_at) || 'sin registrar'}`)
   return partes.filter(Boolean).join(' · ')
 }
@@ -118,7 +117,7 @@ export default function HoyPage() {
       let q = supabase.from('leads').select(CAMPOS)
         .in('estado', ['nuevo', 'contactado', 'en_negociacion'])
         .is('duplicado_de', null)
-        .or('caliente_at.not.is.null,proximo_contacto_at.not.is.null,estado_dni.eq.aprobado,bcra_resultado.eq.apto,fecha_agenda.not.is.null,ultimo_contacto_at.not.is.null,reingreso_at.not.is.null')
+        .or('caliente_at.not.is.null,proximo_contacto_at.not.is.null,estado_dni.eq.aprobado,bcra_resultado.eq.apto,fecha_agenda.not.is.null,ultimo_contacto_at.not.is.null')
         .order('id')
       if (!isAdmin) q = q.eq('vendedor_asignado', profile.id)
       return q
