@@ -3487,3 +3487,54 @@ body {
 .hoy-pago.violeta { background: rgba(124, 58, 237, 0.12); color: #6d28d9; }
 .hoy-pago.gris { background: var(--gray-100); color: var(--gray-600, #636366); }
 .hoy-asunto { font-size: 0.85rem; font-weight: 400; color: var(--gray-800, #2c2c2e); }
+
+/* ===== Agente en vivo ===== */
+.vivo { display: grid; gap: 14px; }
+.vivo-en-linea { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; color: var(--gray-500); }
+.vivo-en-linea.si { color: #15803d; }
+.vivo-en-linea.si svg { animation: vivo-pulso 1.6s ease-in-out infinite; }
+@keyframes vivo-pulso { 50% { opacity: 0.35; } }
+.vivo-panel { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 14px; min-height: 0; }
+.vivo-lista, .vivo-chat { height: calc(100vh - 250px); min-height: 420px; display: flex; flex-direction: column; overflow: hidden; }
+.vivo-lista { overflow-y: auto; }
+.vivo-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 12px; border-bottom: 1px solid var(--gray-100); position: sticky; top: 0; background: var(--white, #fff); z-index: 1; }
+.vivo-filtros .filter-check { margin-left: auto; }
+.vivo-vacio { padding: 24px 16px; color: var(--gray-500); font-size: 0.9rem; text-align: center; }
+.vivo-conv { display: grid; gap: 4px; width: 100%; padding: 11px 14px; border: none; border-bottom: 1px solid var(--gray-100); background: none; text-align: left; font: inherit; cursor: pointer; }
+.vivo-conv:hover { background: var(--gray-50, #f9f9fb); }
+.vivo-conv.activa { background: rgba(0, 122, 255, 0.07); }
+.vivo-conv-arriba { display: flex; justify-content: space-between; gap: 8px; font-size: 0.9rem; }
+.vivo-conv-arriba span { font-size: 0.75rem; color: var(--gray-500); white-space: nowrap; }
+.vivo-conv-texto { font-size: 0.8rem; color: var(--gray-600, #636366); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vivo-conv-abajo { display: flex; gap: 6px; flex-wrap: wrap; }
+.vivo-canal, .vivo-estado { font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--gray-100); color: var(--gray-600, #636366); }
+.vivo-canal.whatsapp { background: rgba(37, 211, 102, 0.14); color: #128c4a; }
+.vivo-canal.instagram { background: rgba(225, 48, 108, 0.12); color: #b3134f; }
+.vivo-estado.rojo { background: rgba(220, 38, 38, 0.12); color: #b91c1c; }
+.vivo-estado.azul { background: rgba(0, 122, 255, 0.12); color: #0056b3; }
+.vivo-estado.verde { background: rgba(22, 163, 74, 0.12); color: #15803d; }
+.vivo-estado.naranja { background: rgba(234, 88, 12, 0.12); color: #c2410c; }
+.vivo-chat-cabecera { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--gray-100); }
+.vivo-chat-cabecera > div { display: grid; flex: 1; min-width: 0; }
+.vivo-chat-cabecera span { font-size: 0.75rem; color: var(--gray-500); }
+.vivo-chat-cabecera .btn { display: inline-flex; align-items: center; gap: 4px; }
+.vivo-volver { display: none !important; }
+.vivo-chat-cuerpo { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: var(--gray-50, #f7f7f9); }
+.vivo-msj { max-width: 78%; padding: 8px 11px; border-radius: 12px; background: var(--white, #fff); border: 1px solid var(--gray-200); }
+.vivo-msj.cliente { align-self: flex-start; }
+.vivo-msj.agente { align-self: flex-end; background: #eef6ff; border-color: #cfe3ff; }
+.vivo-msj.humano { align-self: flex-end; background: #ecfdf3; border-color: #bbf0cf; }
+.vivo-msj-autor { display: flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--gray-500); margin-bottom: 3px; }
+.vivo-msj-texto { font-size: 0.875rem; white-space: pre-wrap; word-break: break-word; color: var(--gray-900); }
+.vivo-dato { align-self: center; display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--gray-600, #636366); background: var(--gray-100); padding: 4px 10px; border-radius: 999px; text-align: center; }
+.vivo-dato span { color: var(--gray-400, #aeaeb2); }
+@media (max-width: 860px) {
+  .vivo-panel { grid-template-columns: 1fr; }
+  .vivo-panel .vivo-chat { display: none; }
+  .vivo-panel.con-chat .vivo-lista { display: none; }
+  .vivo-panel.con-chat .vivo-chat { display: flex; }
+  .vivo-volver { display: inline-flex !important; }
+  .vivo-lista, .vivo-chat { height: calc(100vh - 200px); }
+  .vivo-en-linea { margin-left: 0; }
+  .vivo-msj { max-width: 90%; }
+}

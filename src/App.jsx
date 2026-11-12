@@ -4,6 +4,7 @@ import { ToastProvider } from './contexts/ToastContext'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import HoyPage from './pages/HoyPage'
+import AgenteVivoPage from './pages/AgenteVivoPage'
 import LeadsPage from './pages/LeadsPage'
 import LeadDetailPage from './pages/LeadDetailPage'
 import AgendaPage from './pages/AgendaPage'
@@ -89,6 +90,7 @@ function AppRoutes() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="hoy" element={<HoyPage />} />
+        <Route path="agente" element={<AgenteVivoPage />} />
         <Route path="leads" element={<LeadsPage />} />
         <Route path="leads/:id" element={<LeadDetailPage />} />
         <Route path="agenda" element={<AgendaPage />} />

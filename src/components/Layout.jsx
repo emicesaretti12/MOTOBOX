@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   BarChart3,
   Target,
+  Bot,
 } from 'lucide-react'
 
 export default function Layout() {
@@ -36,6 +37,7 @@ export default function Layout() {
     const path = location.pathname
     if (path === '/') return 'Dashboard'
     if (path === '/hoy') return 'Para vender hoy'
+    if (path === '/agente') return 'Agente en vivo'
     if (path === '/leads') return 'Gestión de Leads'
     if (path.startsWith('/leads/')) return 'Detalle del Lead'
     if (path === '/agenda') return 'Agenda'
@@ -82,6 +84,7 @@ export default function Layout() {
   const secciones = [
     { titulo: 'Vender', links: [
       { to: '/hoy', texto: 'Para vender hoy', Icono: Target },
+      { to: '/agente', texto: 'Agente en vivo', Icono: Bot },
       { to: '/leads', texto: 'Leads', Icono: UsersIcon },
       { to: '/agenda', texto: 'Agenda', Icono: Calendar },
       verVerificacion && { to: '/verificacion', texto: 'Verificación DNI', Icono: ShieldCheck },
