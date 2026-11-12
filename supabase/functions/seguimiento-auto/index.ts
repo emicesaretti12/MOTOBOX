@@ -13,7 +13,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { crearClienteSendPulse } from './sendpulse.ts'
 import {
-  decidir, completarTexto, horaCordoba, aplicaRecupero, telefonoWhatsApp, TEXTOS_POR_DEFECTO,
+  decidir, completarTexto, charlaPideEsperar, horaCordoba, aplicaRecupero, telefonoWhatsApp, TEXTOS_POR_DEFECTO,
   type ConfigSeguimiento, type LeadSeguimiento, type EnvioPrevio, type LeadRecupero, type ConfigRecupero,
 } from './logica.ts'
 
@@ -239,6 +239,12 @@ Deno.serve(async (req) => {
     if (resultado.enviados + resultado.fallidos >= MAX_POR_CORRIDA) break
     const d = decidir(l, previos.get(l.id) ?? [], ahora, cfg)
     if (!d) continue
+
+    // Lo que pasó en el chat manda: si el cliente espera respuesta o la charla está viva, no se le recuerda nada.
+    const { data: ultimoMsj } = await db.from('agente_eventos').select('autor, created_at')
+      .eq('contact_id', l.sendpulse_contact_id!).in('tipo', ['mensaje_entrante', 'mensaje_saliente'])
+      .order('created_at', { ascending: false }).limit(1)
+    if (charlaPideEsperar(ultimoMsj?.[0] ?? null, ahora)) continue
 
     // Reserva: si otro proceso ya lo tomó, el índice único lo impide y se saltea.
     const { data: reserva, error: errRes } = await db.from('seguimientos')

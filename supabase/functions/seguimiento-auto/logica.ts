@@ -120,8 +120,9 @@ export const TEXTOS_POR_DEFECTO: Record<string, string> = {
   p1v_visita: 'Hola {nombre}! Soy Valen de MotoBox 🏍️ ¿Querés pasar a ver {moto}? Estamos en Santa Rosa 4227 (BoxPoint), de lunes a sábado de 9 a 19. Decime qué día te queda cómodo y te la tenemos lista.',
   p2_antes_24h_caliente: 'Hola {nombre}! ¿Seguís con ganas de {moto}? Si querés te la reservo y pasás a verla por Santa Rosa 4227 (lunes a sábado de 9 a 19). ¿Qué día te queda bien?',
   p2_antes_24h_dni: 'Hola {nombre}! Mientras revisamos tu DNI, te cuento que con tarjeta de crédito (aceptamos todas, con Naranja hay cuotas bajas) o con un anticipo + cuotas la podés sacar sin esperar la aprobación. ¿Te sirve alguna?',
-  p1_sin_respuesta: '¿Seguís por ahí? 🙌 Te cuento que podés sacarla con tarjeta de crédito (aceptamos todas), con anticipo + cuotas o de contado. ¿Cómo la pensás pagar?',
-  p2_antes_24h: 'Hola {nombre}! Te escribo de Motobox por {moto}. ¿Querés que te pase el precio y las formas de pago? Aceptamos todas las tarjetas de crédito, anticipo + cuotas o contado.',
+  // Neutros a propósito: no vuelven a preguntar algo que el cliente quizás ya contestó en el chat.
+  p1_sin_respuesta: '¿Seguís por ahí? 🙌 Cuando quieras seguimos por acá: te paso el precio de contado o te cuento cómo sacarla con tarjeta (la mejor para financiar es Naranja).',
+  p2_antes_24h: 'Hola {nombre}! ¿Pudiste pensar lo de {moto}? Si querés seguimos por acá y te ayudo a elegir la mejor forma de pago 🙌',
 }
 
 export function horaCordoba(fecha: Date): number {
@@ -150,10 +151,25 @@ function primerNombre(n: string | null): string {
   return limpio[0].toUpperCase() + limpio.slice(1).toLowerCase()
 }
 
+// El agente a veces guarda un estado o un relleno en vez del modelo ("pendiente", "a definir"): no es una moto.
+const NO_ES_MODELO = /consultar|no sabe|ningun|pendiente|definir|cualquier|no dijo|sin dato|^-$|^null$|^undefined$|^contado$|^tarjeta$|^cuotas$/i
+export function modeloValido(modelo: string): boolean {
+  return !!modelo && modelo.length >= 3 && !/^\d+$/.test(modelo) && !NO_ES_MODELO.test(modelo)
+}
+
+// Estado del chat según el último mensaje registrado por el webhook (agente_eventos). Si el cliente fue el último
+// en escribir, le toca responder al bot o a un asesor: un recordatorio ahí lo ignora. Si hubo mensajes hace menos
+// de una hora, la charla sigue viva y no hace falta empujar.
+export function charlaPideEsperar(ultimo: { autor: string | null; created_at: string } | null, ahora: Date): boolean {
+  if (!ultimo) return false
+  if (ultimo.autor === 'cliente') return true
+  return (ahora.getTime() - Date.parse(ultimo.created_at)) / 36e5 < 1
+}
+
 export function completarTexto(plantilla: string, l: LeadSeguimiento): string {
   const nombre = primerNombre(l.nombre)
   const modelo = (l.modelo_interes ?? '').trim()
-  const moto = modelo && !/^\d+$/.test(modelo) && !/consultar|no sabe|ningun|^-$/i.test(modelo) ? `la ${modelo}` : 'la moto que consultaste'
+  const moto = modeloValido(modelo) ? `la ${modelo}` : 'la moto que consultaste'
   return plantilla
     .replace(/\{nombre\}/g, nombre)
     .replace(/\{moto\}/g, moto)

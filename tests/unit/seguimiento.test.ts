@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { decidir, completarTexto, horaCordoba, telefonoWhatsApp, aplicaRecupero, type LeadSeguimiento, type ConfigSeguimiento } from '../../supabase/functions/seguimiento-auto/logica.ts'
+import { decidir, completarTexto, charlaPideEsperar, modeloValido, horaCordoba, telefonoWhatsApp, aplicaRecupero, type LeadSeguimiento, type ConfigSeguimiento } from '../../supabase/functions/seguimiento-auto/logica.ts'
 
 const CFG: ConfigSeguimiento = {
   horaDesde: 9, horaHasta: 21, separacionMinHoras: 6,
@@ -99,7 +99,7 @@ describe('seguimiento por segmento', () => {
     const t = (l: LeadSeguimiento) => (decidir(l, previos, AHORA, sinTextoP2) as { texto: string }).texto
     expect(t(lead({ forma_pago: 'contado', bot_ultimo_evento_at: hace(19) }))).toMatch(/te la reservo/)
     expect(t(lead({ forma_pago: 'cuotas', estado_dni: 'pendiente', bot_ultimo_evento_at: hace(19) }))).toMatch(/Mientras revisamos tu DNI/)
-    expect(t(lead({ forma_pago: null, bot_ultimo_evento_at: hace(19) }))).toMatch(/precio y las formas de pago/)
+    expect(t(lead({ forma_pago: null, bot_ultimo_evento_at: hace(19) }))).toMatch(/mejor forma de pago/)
   })
 
   it('a los duplicados no se les escribe', () => {
@@ -208,5 +208,25 @@ describe('pidió asesor', () => {
   it('no recibe seguimientos automáticos', () => {
     expect(decidir(lead(), [], AHORA, CFG)).not.toBeNull()
     expect(decidir(lead({ notas: '[x] Bot: el cliente pidió hablar con un asesor' }), [], AHORA, CFG)).toBeNull()
+  })
+})
+
+describe('seguimiento según el chat', () => {
+  const ahora = new Date('2026-11-12T18:00:00Z')
+  const hace = (h: number) => new Date(ahora.getTime() - h * 36e5).toISOString()
+  it('no recuerda nada si el cliente fue el último en escribir', () => {
+    expect(charlaPideEsperar({ autor: 'cliente', created_at: hace(5) }, ahora)).toBe(true)
+  })
+  it('no empuja una charla de hace menos de una hora', () => {
+    expect(charlaPideEsperar({ autor: 'agente', created_at: hace(0.5) }, ahora)).toBe(true)
+  })
+  it('sí recuerda si el bot habló último hace rato o no hay registro', () => {
+    expect(charlaPideEsperar({ autor: 'agente', created_at: hace(3) }, ahora)).toBe(false)
+    expect(charlaPideEsperar(null, ahora)).toBe(false)
+  })
+  it('"pendiente" no es una moto', () => {
+    expect(modeloValido('pendiente')).toBe(false)
+    expect(modeloValido('Keller Crono Full')).toBe(true)
+    expect(completarTexto('¿Querés pasar a ver {moto}?', { nombre: 'Marta', modelo_interes: 'pendiente' } as never)).toBe('¿Querés pasar a ver la moto que consultaste?')
   })
 })
