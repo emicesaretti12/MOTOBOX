@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { MessageCircle, Phone, ClipboardCheck, BadgeCheck, MoreHorizontal } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -33,6 +33,17 @@ export default function LeadMovil() {
   const eventos = useChatLead(lead)
   const [vista, setVista] = useState(null)
   const [hoja, setHoja] = useState(null) // 'resultado' | 'venta' | 'mas' | 'estado'
+  const [teclado, setTeclado] = useState(false)
+
+  // Con el teclado abierto el chat ocupa toda la pantalla (como WhatsApp).
+  useEffect(() => {
+    const esCaja = (e) => e.target?.closest?.('.mv-chat-escribir')
+    const entra = (e) => { if (esCaja(e)) setTeclado(true) }
+    const sale = (e) => { if (esCaja(e)) setTeclado(false) }
+    document.addEventListener('focusin', entra)
+    document.addEventListener('focusout', sale)
+    return () => { document.removeEventListener('focusin', entra); document.removeEventListener('focusout', sale) }
+  }, [])
 
   if (error) return <Pantalla titulo="Lead" atras sinTituloGrande><Vacio titulo={error} /></Pantalla>
   if (!lead) return <Pantalla titulo="" atras sinTituloGrande><div className="mv-chat-cargando"><span className="mv-spinner" /></div></Pantalla>
@@ -59,24 +70,50 @@ export default function LeadMovil() {
     { Icono: MoreHorizontal, texto: 'Más', onClick: () => setHoja('mas') },
   ]
 
+  const enChat = pestana === 'chat'
+  const segmentos = <Segmentos opciones={[{ valor: 'chat', texto: 'Chat' }, { valor: 'datos', texto: 'Datos' }]} valor={pestana} onCambio={setVista} />
+  const llamar = () => { window.location.href = `tel:${String(lead.telefono).replace(/[^\d+]/g, '')}` }
+
   return (
-    <Pantalla titulo={lead.nombre || 'Sin nombre'} atras sinTituloGrande className={`mv-pantalla-lead ${pestana === 'chat' ? 'en-chat' : ''}`}>
-      <div className="mv-ficha">
-        <Avatar nombre={lead.nombre} tam={64} />
-        <h2>{lead.nombre || 'Sin nombre'}</h2>
-        <div className="mv-ficha-pastillas">
-          <Pastilla tono={TONO_ESTADO[lead.estado]}>{LEAD_STATUS_LABELS[lead.estado]}</Pastilla>
-          <Pastilla tono={pago.tono}>{pago.texto}</Pastilla>
+    <Pantalla
+      titulo={lead.nombre || 'Sin nombre'}
+      atras
+      sinTituloGrande
+      className={`mv-pantalla-lead ${enChat ? 'en-chat' : ''} ${enChat && teclado ? 'con-teclado' : ''}`}
+      accion={enChat && (
+        <>
+          {lead.telefono && <button className="mv-nav-boton" aria-label="Llamar" onClick={llamar}><Phone size={22} /></button>}
+          <button className="mv-nav-boton" aria-label="Más opciones" onClick={() => setHoja('mas')}><MoreHorizontal size={24} /></button>
+        </>
+      )}
+    >
+      {enChat ? (
+        // En el chat la cabecera es mínima: el espacio es para los mensajes.
+        <div className="mv-ficha-chat">
+          <div className="mv-ficha-pastillas">
+            <Pastilla tono={TONO_ESTADO[lead.estado]}>{LEAD_STATUS_LABELS[lead.estado]}</Pastilla>
+            <Pastilla tono={pago.tono}>{pago.texto}</Pastilla>
+          </div>
+          {segmentos}
         </div>
-        <div className="mv-acciones-redondas">
-          {acciones.map(({ Icono, texto, clase, off, onClick }) => (
-            <button key={texto} className={clase || ''} disabled={off} onClick={onClick}>
-              <span><Icono size={20} /></span>{texto}
-            </button>
-          ))}
+      ) : (
+        <div className="mv-ficha">
+          <Avatar nombre={lead.nombre} tam={64} />
+          <h2>{lead.nombre || 'Sin nombre'}</h2>
+          <div className="mv-ficha-pastillas">
+            <Pastilla tono={TONO_ESTADO[lead.estado]}>{LEAD_STATUS_LABELS[lead.estado]}</Pastilla>
+            <Pastilla tono={pago.tono}>{pago.texto}</Pastilla>
+          </div>
+          <div className="mv-acciones-redondas">
+            {acciones.map(({ Icono, texto, clase, off, onClick }) => (
+              <button key={texto} className={clase || ''} disabled={off} onClick={onClick}>
+                <span><Icono size={20} /></span>{texto}
+              </button>
+            ))}
+          </div>
+          {segmentos}
         </div>
-        <Segmentos opciones={[{ valor: 'chat', texto: 'Chat' }, { valor: 'datos', texto: 'Datos' }]} valor={pestana} onCambio={setVista} />
-      </div>
+      )}
 
       {pestana === 'chat' ? (
         <Conversacion lead={lead} eventos={eventos} />
@@ -117,6 +154,9 @@ export default function LeadMovil() {
         onCerrar={() => setHoja(null)}
         titulo={lead.nombre}
         acciones={[
+          enChat && lead.telefono && { texto: 'Abrir en WhatsApp', onClick: () => { abrirWhatsApp(lead.telefono, mensajeCaliente(lead, profile?.full_name)); setTimeout(() => setHoja('resultado'), 50) } },
+          enChat && !cerrado && { texto: 'Anotar resultado', onClick: () => setTimeout(() => setHoja('resultado'), 50) },
+          enChat && lead.estado !== 'venta_cerrada' && { texto: 'Registrar venta', onClick: () => setTimeout(() => setHoja('venta'), 50) },
           { texto: 'Cambiar estado', onClick: () => setTimeout(() => setHoja('estado'), 50) },
           lead.telefono && { texto: 'Copiar teléfono', onClick: () => navigator.clipboard?.writeText(lead.telefono).then(() => addToast('Teléfono copiado', 'success')) },
           !cerrado && { texto: 'Marcar como perdido', destructiva: true, onClick: () => setTimeout(() => setHoja('resultado'), 50) },

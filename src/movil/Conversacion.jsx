@@ -70,6 +70,19 @@ export default function Conversacion({ lead, eventos }) {
 
   useEffect(() => { const t = setInterval(() => setReloj(new Date()), 60000); return () => clearInterval(t) }, [])
   useLayoutEffect(() => { const c = cuerpo.current; if (c) c.scrollTop = c.scrollHeight }, [eventos?.length])
+  // Si el chat se achica (abre el teclado) se queda mirando el último mensaje, como WhatsApp.
+  useEffect(() => {
+    const c = cuerpo.current
+    if (!c || typeof ResizeObserver === 'undefined') return
+    let alto = c.clientHeight
+    const ro = new ResizeObserver(() => {
+      const antes = alto; alto = c.clientHeight
+      const cercaDelFinal = c.scrollHeight - c.scrollTop - antes < 80
+      if (cercaDelFinal) c.scrollTop = c.scrollHeight
+    })
+    ro.observe(c)
+    return () => ro.disconnect()
+  }, [])
   useLayoutEffect(() => {
     const a = area.current; if (!a) return
     a.style.height = 'auto'; a.style.height = `${Math.min(120, a.scrollHeight)}px`
@@ -94,7 +107,7 @@ export default function Conversacion({ lead, eventos }) {
 
   return (
     <div className="mv-chat">
-      <div className="mv-chat-cuerpo" ref={cuerpo}>
+      <div className="mv-chat-cuerpo" ref={cuerpo} onTouchMove={() => { if (document.activeElement?.tagName === "TEXTAREA") document.activeElement.blur() }}>
         <Burbujas eventos={eventos} vacio={contacto ? 'Todavía no hay mensajes guardados con este cliente.' : 'Este lead no escribió por el bot. Usá el botón de WhatsApp para hablarle.'} />
       </div>
       {contacto && (

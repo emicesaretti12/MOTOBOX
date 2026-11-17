@@ -353,9 +353,18 @@ html.mv-app input, html.mv-app textarea, html.mv-app select,
 .mv-pantalla-lead.en-chat .mv-nav { position: relative; flex: 0 0 auto; background: var(--mv-barra); box-shadow: 0 0.5px 0 rgba(0,0,0,0.3); }
 .mv-pantalla-lead.en-chat .mv-nav-titulo { opacity: 1; transform: none; }
 .mv-pantalla-lead.en-chat .mv-cuerpo { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0; }
-.mv-pantalla-lead.en-chat .mv-ficha { padding-top: 10px; background: var(--mv-fondo); }
-.mv-pantalla-lead.en-chat .mv-ficha .mv-avatar,
-.mv-pantalla-lead.en-chat .mv-ficha h2 { display: none; }
+.mv-ficha-chat {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 8px 16px 8px;
+  background: var(--mv-barra); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: 0 0.5px 0 rgba(0,0,0,0.2); position: relative; z-index: 2;
+}
+.mv-ficha-chat .mv-ficha-pastillas { justify-content: center; }
+/* Con el teclado abierto: solo barra de arriba, mensajes y caja de texto. */
+.con-teclado .mv-ficha-chat { display: none; }
+.con-teclado .mv-chat-escribir { padding-bottom: 7px; }
+html.mv-app:has(.en-chat), html.mv-app:has(.en-chat) body { overflow: hidden; overscroll-behavior: none; }
+.mv-pantalla-lead.en-chat .mv-nav { box-shadow: none; }
+.mv-pantalla-lead.en-chat .mv-nav-titulo { max-width: 46vw; }
 
 /* ---------- Chat ---------- */
 .mv-chat { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; background: #efeae2; }
