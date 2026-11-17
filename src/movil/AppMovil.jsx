@@ -84,16 +84,29 @@ export default function AppMovil() {
     const vv = window.visualViewport
     const medir = () => {
       if (!vv) return
-      html.style.setProperty('--mv-alto-visible', `${vv.height}px`)
-      html.style.setProperty('--mv-vv-arriba', `${vv.offsetTop}px`)
+      html.style.setProperty('--mv-alto-visible', `${Math.round(vv.height)}px`)
+      html.style.setProperty('--mv-vv-arriba', `${Math.round(vv.offsetTop)}px`)
+    }
+    // El teclado del iPhone sube con una animación y avisa antes de terminar: se vuelve a medir durante ~700 ms.
+    let cuadro
+    const seguir = () => {
+      cancelAnimationFrame(cuadro)
+      const fin = performance.now() + 700
+      const paso = () => { medir(); if (performance.now() < fin) cuadro = requestAnimationFrame(paso) }
+      paso()
     }
     medir()
-    vv?.addEventListener('resize', medir)
+    vv?.addEventListener('resize', seguir)
     vv?.addEventListener('scroll', medir)
+    document.addEventListener('focusin', seguir)
+    document.addEventListener('focusout', seguir)
     return () => {
       html.classList.remove('mv-app')
-      vv?.removeEventListener('resize', medir)
+      cancelAnimationFrame(cuadro)
+      vv?.removeEventListener('resize', seguir)
       vv?.removeEventListener('scroll', medir)
+      document.removeEventListener('focusin', seguir)
+      document.removeEventListener('focusout', seguir)
     }
   }, [])
 
