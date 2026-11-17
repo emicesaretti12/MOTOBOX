@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useCrmConfig } from '../hooks/useCrmConfig'
 import { puedeVerificar } from '../lib/verificacion'
 import InstalarApp from './InstalarApp'
@@ -32,6 +32,12 @@ export default function Layout() {
   const { profile, logout, isAdmin } = useAuth()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [calientes, setCalientes] = useState(0)
+  useEffect(() => {
+    const h = (e) => setCalientes(Number(e.detail) || 0)
+    window.addEventListener('calientes-pendientes', h)
+    return () => window.removeEventListener('calientes-pendientes', h)
+  }, [])
   const crmConfig = useCrmConfig()
   const verVerificacion = !!crmConfig?.colaDniActiva && puedeVerificar(profile)
 
@@ -188,13 +194,16 @@ export default function Layout() {
       {/* Barra de pestañas de la app en el celular (en escritorio no se muestra). */}
       <nav className="tabbar" aria-label="Navegación principal">
         {[
-          { to: '/hoy', texto: 'Hoy', Icono: Target },
+          { to: '/hoy', texto: 'Hoy', Icono: Target, badge: calientes },
           { to: '/leads', texto: 'Leads', Icono: UsersIcon },
           { to: '/agente', texto: 'Chats', Icono: Bot },
           { to: '/agenda', texto: 'Agenda', Icono: Calendar },
-        ].map(({ to, texto, Icono }) => (
+        ].map(({ to, texto, Icono, badge }) => (
           <NavLink key={to} to={to} className={({ isActive }) => `tabbar-item ${isActive && !sidebarOpen ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
-            <Icono size={22} strokeWidth={2} />
+            <span className="tabbar-icono">
+              <Icono size={22} strokeWidth={2} />
+              {badge > 0 && <span className="tabbar-badge">{badge > 99 ? '99+' : badge}</span>}
+            </span>
             <span>{texto}</span>
           </NavLink>
         ))}

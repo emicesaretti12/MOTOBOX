@@ -55,6 +55,8 @@ export default function AlertaCalientes() {
       const nuevos = vistos.current ? data.filter((l) => !vistos.current.has(l.id)) : []
       vistos.current = new Set(data.map((l) => l.id))
       setLeads(ordenarCalientes(data))
+      // En el celular el aviso va como número rojo sobre la pestaña "Hoy" (lo dibuja Layout).
+      window.dispatchEvent(new CustomEvent('calientes-pendientes', { detail: data.length }))
       if (nuevos.length) {
         sonar()
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
