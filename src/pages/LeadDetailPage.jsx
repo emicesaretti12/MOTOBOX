@@ -9,6 +9,7 @@ import VerificacionCredito from '../components/VerificacionCredito'
 import RegistrarVenta from '../components/RegistrarVenta'
 import ChatLead from '../components/ChatLead'
 import { FORMA_PAGO_LABELS, nivelPuntaje } from '../lib/verificacion'
+import { useRefrescoAuto } from '../hooks/useRefrescoAuto'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const TIPO_LABELS = { llamada: 'Llamada', whatsapp: 'WhatsApp', email: 'Email', visita: 'Visita', otro: 'Otro' }
@@ -71,6 +72,8 @@ export default function LeadDetailPage() {
   const [showVenta, setShowVenta] = useState(false)
 
   useEffect(() => { if (id) fetchAll() }, [id])
+
+  useRefrescoAuto(() => fetchAll(), 30000)
 
   async function fetchAll() {
     try {

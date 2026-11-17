@@ -8,7 +8,9 @@ export default defineConfig({
     // App instalable en el celular (Android y iPhone): ícono en la pantalla de inicio, pantalla completa
     // y arranque rápido. Los datos siempre se piden en vivo a Supabase: solo se guarda la app en sí.
     VitePWA({
-      registerType: 'autoUpdate',
+      // La actualización la maneja src/actualizarApp.js: recarga sola apenas no interrumpe (ver ahí).
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['icons/apple-touch-icon.png', 'icons/favicon-64.png'],
       manifest: {
         name: 'MotoBox CRM',

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, traerTodos } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { Calendar, Clock, ChevronLeft, ChevronRight, Phone, MessageCircle, Plus, MapPin } from 'lucide-react'
+import { useRefrescoAuto } from '../hooks/useRefrescoAuto'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const DAY_NAMES_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -45,6 +46,8 @@ export default function AgendaPage() {
   const weekDays = useMemo(() => getDaysInRange(monday, 7), [monday])
 
   useEffect(() => { fetchData() }, [])
+
+  useRefrescoAuto(() => fetchData(), 60000)
 
   async function fetchData() {
     try {

@@ -4,6 +4,7 @@ import { supabase, traerTodos } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import RegistrarVenta from '../components/RegistrarVenta'
+import { useRefrescoAuto } from '../hooks/useRefrescoAuto'
 import { colaDeHoy, avanceDeHoy, resultadoContacto, comoPaga, asunto, MOTIVOS_PERDIDO, INTENTOS_MAXIMOS } from '../lib/hoy'
 import { linkCaliente } from '../lib/calientes'
 import { MessageCircle, Phone, Check, PhoneOff, CalendarPlus, Clock, XCircle, PartyPopper, BadgeCheck } from 'lucide-react'
@@ -130,11 +131,8 @@ export default function HoyPage() {
     setLeads(data || [])
   }, [profile?.id, isAdmin])
 
-  useEffect(() => {
-    cargar()
-    const reloj = setInterval(cargar, 120000)
-    return () => clearInterval(reloj)
-  }, [cargar])
+  useEffect(() => { cargar() }, [cargar])
+  useRefrescoAuto(() => cargar(), 60000)
 
   const visibles = useMemo(() => (soloMios ? (leads || []).filter((l) => l.vendedor_asignado === profile?.id) : leads || []), [leads, soloMios, profile?.id])
   const cola = useMemo(() => colaDeHoy(visibles), [visibles])

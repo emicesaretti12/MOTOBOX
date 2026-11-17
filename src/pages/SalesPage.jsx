@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { Plus, Search, X, Edit, Trash2, DollarSign, TrendingUp, Award } from 'lucide-react'
+import { useRefrescoAuto } from '../hooks/useRefrescoAuto'
 
 const EMPTY_SALE = { lead_id: '', moto_id: '', vendedor_id: '', precio_venta: '', metodo_pago: 'efectivo', fecha_venta: new Date().toISOString().slice(0, 16), notas: '' }
 const PAGO_LABELS = { efectivo: 'Efectivo', transferencia: 'Transferencia', tarjeta: 'Tarjeta', financiacion: 'Financiación', mixto: 'Mixto' }
@@ -25,6 +26,8 @@ export default function SalesPage() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { fetchData() }, [])
+
+  useRefrescoAuto(() => fetchData(), 120000)
 
   async function fetchData() {
     try {
