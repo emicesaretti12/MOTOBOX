@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useState } from 'react'
 import { useCrmConfig } from '../hooks/useCrmConfig'
 import { puedeVerificar } from '../lib/verificacion'
+import InstalarApp from './InstalarApp'
 import AlertaCalientes from './AlertaCalientes'
 import {
   LayoutDashboard,
@@ -157,6 +158,7 @@ export default function Layout() {
               </div>
             </div>
           </div>
+          <InstalarApp />
           <button className="sidebar-link" onClick={logout}>
             <LogOut size={18} />
             Cerrar Sesión

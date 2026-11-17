@@ -59,8 +59,14 @@ export default function AlertaCalientes() {
         sonar()
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           const l = nuevos[0]
-          const n = new Notification('🔥 Lead caliente', { body: `${l.nombre} — ${motivo(l)}. Escribile ya.`, tag: l.id })
-          n.onclick = () => { window.focus(); navigate('/hoy') }
+          const titulo = '🔥 Lead caliente'
+          const opciones = { body: `${l.nombre} — ${motivo(l)}. Escribile ya.`, tag: l.id, icon: '/icons/icon-192.png', data: { url: '/hoy' } }
+          // En la app instalada (Android) las notificaciones tienen que salir por el service worker.
+          navigator.serviceWorker?.getRegistration().then((reg) => {
+            if (reg) return reg.showNotification(titulo, opciones)
+            const n = new Notification(titulo, opciones)
+            n.onclick = () => { window.focus(); navigate('/hoy') }
+          }).catch(() => {})
         }
       }
     }

@@ -80,8 +80,6 @@ export default function SalesPage() {
       } else {
         const { error } = await supabase.from('ventas').insert([payload])
         if (error) throw error
-        // Marcar moto como vendida
-        if (payload.moto_id) await supabase.from('inventario_motos').update({ estado: 'vendida' }).eq('id', payload.moto_id)
         addToast('Venta registrada', 'success')
       }
       setIsModalOpen(false)

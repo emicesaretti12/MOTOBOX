@@ -28,6 +28,13 @@ Deno.serve(async (req) => {
   const filas = []
   for (const ev of eventosDelBody(body)) {
     const e = normalizar(ev)
+    // Un mensaje que mandó un vendedor desde el CRM ya quedó guardado (autor humano) por enviar-mensaje:
+    // SendPulse lo vuelve a avisar como saliente y no hay que duplicarlo.
+    if (e.tipo === 'mensaje_saliente' && e.contact_id && e.texto) {
+      const { data: yaEsta } = await db.from('agente_eventos').select('id').eq('contact_id', e.contact_id)
+        .eq('autor', 'humano').eq('texto', e.texto).gte('created_at', new Date(Date.now() - 5 * 60000).toISOString()).limit(1)
+      if (yaEsta?.length) continue
+    }
     let leadId: string | null = null
     if (e.contact_id) {
       const { data } = await db.from('leads').select('id').eq('sendpulse_contact_id', e.contact_id).order('created_at', { ascending: false }).limit(1)
