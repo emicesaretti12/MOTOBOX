@@ -1,8 +1,47 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // App instalable en el celular (Android y iPhone): ícono en la pantalla de inicio, pantalla completa
+    // y arranque rápido. Los datos siempre se piden en vivo a Supabase: solo se guarda la app en sí.
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icons/apple-touch-icon.png', 'icons/favicon-64.png'],
+      manifest: {
+        name: 'MotoBox CRM',
+        short_name: 'MotoBox',
+        description: 'Leads, conversaciones y ventas de MotoBox',
+        lang: 'es-AR',
+        start_url: '/hoy',
+        scope: '/',
+        display: 'standalone',
+        orientation: 'portrait',
+        background_color: '#ffffff',
+        theme_color: '#0a0a0a',
+        icons: [
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+        shortcuts: [
+          { name: 'Para vender hoy', url: '/hoy', icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }] },
+          { name: 'Agente en vivo', url: '/agente', icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }] },
+        ],
+      },
+      workbox: {
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
+        globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
+        importScripts: ['/sw-extra.js'],
+      },
+    }),
+  ],
   server: {
     port: 5173,
     open: true

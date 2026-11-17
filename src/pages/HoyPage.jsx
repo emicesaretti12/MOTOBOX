@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, traerTodos } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
+import RegistrarVenta from '../components/RegistrarVenta'
 import { colaDeHoy, avanceDeHoy, resultadoContacto, comoPaga, asunto, MOTIVOS_PERDIDO, INTENTOS_MAXIMOS } from '../lib/hoy'
 import { linkCaliente } from '../lib/calientes'
-import { MessageCircle, Phone, Check, PhoneOff, CalendarPlus, Clock, XCircle, PartyPopper } from 'lucide-react'
+import { MessageCircle, Phone, Check, PhoneOff, CalendarPlus, Clock, XCircle, PartyPopper, BadgeCheck } from 'lucide-react'
 
 const CAMPOS = 'id, nombre, telefono, notas, modelo_interes, forma_pago, anticipo, usada_detalle, monto_aprobado, bcra_resultado, estado_dni, estado, origen, prioridad, puntaje_compra, updated_at, ' +
   'fecha_agenda, caliente_at, caliente_atendido_at, caliente_motivo, dni_actualizado_at, duplicado_de, ' +
@@ -35,7 +36,7 @@ function mananaALas10() {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 }
 
-function Fila({ lead, clave, isAdmin, vendedor, onResultado, guardando }) {
+function Fila({ lead, clave, isAdmin, vendedor, onResultado, onVenta, guardando }) {
   const navigate = useNavigate()
   const [abierta, setAbierta] = useState(false) // muestra "¿Cómo te fue?" recién después de contactar
   const [modo, setModo] = useState(null) // 'visita' | 'posponer' | 'perdido'
@@ -78,6 +79,7 @@ function Fila({ lead, clave, isAdmin, vendedor, onResultado, guardando }) {
         <button className="btn btn-sm btn-secondary" disabled={guardando} onClick={() => confirmar('no_contesta')}><PhoneOff size={14} /> No contesta</button>
         <button className={`btn btn-sm ${modo === 'visita' ? 'btn-primary' : 'btn-secondary'}`} disabled={guardando} onClick={() => setModo(modo === 'visita' ? null : 'visita')}><CalendarPlus size={14} /> Agendó visita</button>
         <button className={`btn btn-sm ${modo === 'posponer' ? 'btn-primary' : 'btn-secondary'}`} disabled={guardando} onClick={() => setModo(modo === 'posponer' ? null : 'posponer')}><Clock size={14} /> Más adelante</button>
+        <button className="btn btn-sm btn-vendido" disabled={guardando} onClick={() => onVenta(lead)}><BadgeCheck size={14} /> Vendió</button>
         <button className={`btn btn-sm ${modo === 'perdido' ? 'btn-primary' : 'btn-secondary'}`} disabled={guardando} onClick={() => setModo(modo === 'perdido' ? null : 'perdido')}><XCircle size={14} /> Perdido</button>
       </div>}
 
@@ -110,6 +112,7 @@ export default function HoyPage() {
   const [pestana, setPestana] = useState(null)
   const [mostrar, setMostrar] = useState(POR_TANDA)
   const [soloMios, setSoloMios] = useState(false)
+  const [venta, setVenta] = useState(null)
 
   const cargar = useCallback(async () => {
     if (!profile?.id) return
@@ -158,6 +161,7 @@ export default function HoyPage() {
 
   return (
     <div className="hoy">
+      {venta && <RegistrarVenta lead={venta} onClose={() => setVenta(null)} onGuardada={() => { setLeads((prev) => (prev || []).filter((l) => l.id !== venta.id)); setVenta(null) }} />}
       <div className="hoy-resumen">
         <div className="hoy-numero pendientes"><strong>{cola.total}</strong><span>para contactar</span></div>
         <div className="hoy-numero"><strong>{avance.contactados}</strong><span>contactados hoy</span></div>
@@ -191,7 +195,7 @@ export default function HoyPage() {
             <div className="card-body">
               <p className="aviso-detalle hoy-ayuda">{grupo.ayuda}</p>
               {grupo.leads.slice(0, mostrar).map((l) => (
-                <Fila key={l.id} lead={l} clave={grupo.clave} isAdmin={isAdmin} vendedor={profile?.full_name} onResultado={registrar} guardando={guardando === l.id} />
+                <Fila key={l.id} lead={l} clave={grupo.clave} isAdmin={isAdmin} vendedor={profile?.full_name} onResultado={registrar} onVenta={setVenta} guardando={guardando === l.id} />
               ))}
               {grupo.leads.length > mostrar && (
                 <button className="btn-link hoy-mas" onClick={() => setMostrar((n) => n + POR_TANDA)}>

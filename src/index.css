@@ -3543,3 +3543,30 @@ body {
 .calidad-vacio { padding: 16px 20px; color: var(--gray-500); font-size: 0.9rem; }
 .calidad-canal { font-size: 0.72rem; color: var(--gray-500); }
 .calidad-pct { font-size: 0.75rem; color: var(--gray-500); margin-left: 4px; }
+
+/* ===== Registrar venta ===== */
+.quick-action.vendido { background: #16a34a; color: #fff; border-color: #16a34a; }
+.quick-action.vendido:hover { background: #15803d; }
+.btn-vendido { background: #16a34a; color: #fff; border: 1px solid #16a34a; }
+.btn-vendido:hover:not(:disabled) { background: #15803d; }
+
+/* ===== Conversación en la ficha del lead ===== */
+.chat-lead { margin-bottom: 20px; }
+.chat-lead .card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.chat-lead .card-header h3 { display: inline-flex; align-items: center; gap: 6px; }
+.chat-ventana { font-size: 0.75rem; padding: 3px 10px; border-radius: 999px; background: rgba(220, 38, 38, 0.1); color: #b91c1c; font-weight: 600; }
+.chat-ventana.abierta { background: rgba(22, 163, 74, 0.1); color: #15803d; }
+.chat-lead-cuerpo { max-height: 380px; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: var(--gray-50, #f7f7f9); }
+.chat-lead-vacio { color: var(--gray-500); font-size: 0.875rem; text-align: center; }
+.chat-lead-enviar { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--gray-100); align-items: flex-end; }
+.chat-lead-enviar textarea { flex: 1; resize: none; }
+.chat-lead-enviar .btn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+@media (max-width: 600px) { .chat-lead-cuerpo { max-height: 55vh; } }
+
+/* ===== App instalable ===== */
+.instalar-app { color: #16a34a !important; font-weight: 600; }
+.instalar-pasos p { margin: 0 0 10px; line-height: 1.5; }
+@supports (padding: env(safe-area-inset-top)) {
+  .topbar { padding-top: max(env(safe-area-inset-top), 0px); }
+  .page-content { padding-bottom: calc(env(safe-area-inset-bottom) + 16px); }
+}
