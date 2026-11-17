@@ -132,3 +132,10 @@ CÓMO RESPONDER:
 Último mensaje que escribió el cliente: {{last_message}}
 ```
 
+
+## Cambios 17/11/2026 (Calificación WhatsApp e Instagram)
+
+- FINANCIA solo sale si el cliente escribió un número de DNI (antes salía con el nombre y decía "consultando tu DNI" sin DNI).
+- Anticipo + tarjeta se trata como tarjeta: no se pide DNI y sale por CONTADO o TARJETA apenas dice la moto.
+- Modelos sin precio en los datos (XR, Crono ECO, Gilera, Motomel, Yamaha…): no se niega ni se cambia por otro; precio y
+  stock los confirma el asesor. No se inventan características técnicas.
