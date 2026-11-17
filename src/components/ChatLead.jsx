@@ -14,7 +14,7 @@ export default function ChatLead({ lead }) {
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [reloj, setReloj] = useState(() => new Date())
-  const finRef = useRef(null)
+  const cuerpoRef = useRef(null)
   const contacto = lead?.sendpulse_contact_id
 
   useEffect(() => {
@@ -34,7 +34,8 @@ export default function ChatLead({ lead }) {
     return () => { activo = false; supabase.removeChannel(canal); clearInterval(t) }
   }, [lead?.id, contacto])
 
-  useEffect(() => { finRef.current?.scrollIntoView({ block: 'nearest' }) }, [eventos?.length])
+  // Baja hasta el último mensaje dentro del recuadro (sin mover la página).
+  useEffect(() => { const c = cuerpoRef.current; if (c) c.scrollTop = c.scrollHeight }, [eventos?.length])
 
   if (!lead || eventos === null) return null
   if (!contacto && eventos.length === 0) return null
@@ -63,7 +64,7 @@ export default function ChatLead({ lead }) {
         <h3><MessageSquare size={16} /> Conversación</h3>
         {contacto && <span className={`chat-ventana ${ventana.abierta ? 'abierta' : ''}`}>{ventana.texto}</span>}
       </div>
-      <div className="chat-lead-cuerpo">
+      <div className="chat-lead-cuerpo" ref={cuerpoRef}>
         {eventos.length === 0 && <p className="chat-lead-vacio">Todavía no hay mensajes guardados de este cliente.</p>}
         {eventos.map((e) => {
           if (e.tipo === 'dato') return <div key={e.id} className="vivo-dato"><Info size={12} /> {e.texto} <span>{hora(e.created_at)}</span></div>
@@ -76,7 +77,6 @@ export default function ChatLead({ lead }) {
             </div>
           )
         })}
-        <div ref={finRef} />
       </div>
       {contacto && (
         <form className="chat-lead-enviar" onSubmit={enviar}>
