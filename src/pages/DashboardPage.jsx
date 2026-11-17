@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import CalidadAnuncios from '../components/CalidadAnuncios'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { Users, Award, Target, DollarSign, ChevronRight, Phone, MessageCircle, Calendar, Flame, Snowflake, Clock, Zap, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react'
+import { useRefrescoAuto } from '../hooks/useRefrescoAuto'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const STATUS_COLORS = { nuevo: '#2563EB', contactado: '#D97706', en_negociacion: '#7C3AED', venta_cerrada: '#16A34A', perdido: '#71717A' }
@@ -81,6 +82,8 @@ export default function DashboardPage() {
       supabase.removeChannel(channel)
     }
   }, [])
+
+  useRefrescoAuto(() => fetchData(), 120000)
 
   async function fetchData() {
     try {

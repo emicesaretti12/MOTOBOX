@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { agruparConversaciones, resumenDelDia, vistaPrevia } from '../lib/agenteVivo'
 import { inicioDelDia } from '../lib/hoy'
+import { useRefrescoAuto } from '../hooks/useRefrescoAuto'
 import { Bot, User, Headphones, Info, ArrowLeft, ExternalLink, Radio } from 'lucide-react'
 
 const HORAS = 48
@@ -53,17 +54,22 @@ export default function AgenteVivoPage() {
   const [reloj, setReloj] = useState(() => new Date())
   const finRef = useRef(null)
 
-  useEffect(() => {
-    let activo = true
+  const cargar = useCallback(() => {
     const desde = new Date(Date.now() - HORAS * 3600000).toISOString()
-    supabase.from('agente_eventos')
+    return supabase.from('agente_eventos')
       .select('id, created_at, canal, tipo, autor, contact_id, telefono, nombre, lead_id, texto')
       .gte('created_at', desde).order('created_at', { ascending: false }).limit(LIMITE)
       .then(({ data, error: err }) => {
-        if (!activo) return
         if (err) setError('No se pudo cargar la actividad del agente.')
-        else setEventos(data ?? [])
+        else { setError(null); setEventos(data ?? []) }
       })
+  }, [])
+  // Al volver a la app (la conexión en vivo se corta con la pantalla bloqueada) se trae lo que llegó mientras tanto.
+  useRefrescoAuto(() => cargar(), 120000)
+
+  useEffect(() => {
+    let activo = true
+    cargar().then(() => { if (!activo) return })
     const sub = supabase.channel('agente-en-vivo')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'agente_eventos' }, ({ new: fila }) => {
         setEventos((prev) => (prev && !prev.some((x) => x.id === fila.id) ? [fila, ...prev] : prev))
