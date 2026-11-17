@@ -15,13 +15,21 @@
     --m-safe-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  html { -webkit-text-size-adjust: 100%; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: manipulation; }
   body {
     background: #f2f2f7;
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior-y: none;
+    /* Como en una app: no se selecciona texto al mantener apretado (sí en campos y mensajes). */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
+  input, textarea, select, [contenteditable], .vivo-msj-texto, .detail-value, .hoy-asunto { -webkit-user-select: text; user-select: text; }
   * { -webkit-tap-highlight-color: transparent; }
+  /* En pantallas táctiles el "hover" queda pegado después de tocar: se anulan los movimientos de hover. */
+  .btn:hover, .quick-action:hover, .stat-card:hover, .card:hover, .kanban-card:hover { transform: none !important; }
+  img { -webkit-user-drag: none; }
 
   /* ---------- Estructura ---------- */
   .app-layout { display: block; min-height: 100dvh; }
@@ -246,4 +254,91 @@
 /* App instalada (sin barra del navegador): un poco más de aire arriba en iPhone. */
 @media (max-width: 768px) and (display-mode: standalone) {
   .topbar { padding-top: max(var(--m-safe-top), 8px); }
+}
+
+@media (max-width: 768px) {
+  /* ---------- Aviso de leads calientes → número rojo en la pestaña Hoy ---------- */
+  .alerta-calientes { display: none !important; }
+  .tabbar-icono { position: relative; display: inline-flex; }
+  .tabbar-badge {
+    position: absolute;
+    top: -5px;
+    left: 14px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: #ff3b30;
+    color: #fff;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    border: 2px solid #fff;
+    box-sizing: content-box;
+  }
+
+  /* ---------- Números: tarjetas compactas en fila (ícono a la izquierda) ---------- */
+  .stat-card {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 10px;
+    row-gap: 0;
+    align-items: center;
+    padding: 12px;
+  }
+  .stat-card::after { height: 0 !important; }
+  .stat-card-header { grid-row: 1 / span 3; margin: 0; align-self: center; }
+  .stat-card-icon { width: 34px; height: 34px; border-radius: 10px; }
+  .stat-card-icon svg { width: 18px; height: 18px; }
+  .stat-card-value { font-size: 1.25rem; line-height: 1.1; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stat-card-label { font-size: 0.6875rem; line-height: 1.2; margin: 0; }
+  .stat-card-trend { grid-column: 2; font-size: 0.6875rem; margin: 0; }
+}
+
+@media (max-width: 768px) {
+  /* ---------- Barras de filtros: buscadores y selects a todo el ancho, botones chicos en fila ---------- */
+  .filters-bar { flex-direction: row !important; flex-wrap: wrap; align-items: center !important; }
+  .filters-bar > .search-input-wrap,
+  .filters-bar > input,
+  .filters-bar > select,
+  .filters-bar > .filter-select,
+  .filters-bar > .results-count { flex: 1 1 100%; max-width: 100%; }
+  .filters-bar > .btn-sm { flex: 0 0 auto; }
+  .filters-bar > .btn-primary.btn-sm { flex: 1 1 auto; }
+}
+
+@media (max-width: 768px) {
+  /* ---------- Lista de leads: cada lead como fila de app (no tabla) ---------- */
+  .filters-bar > .filter-select { flex: 1 1 calc(50% - 4px); }
+  .leads-tabla, .leads-tabla tbody { display: block; width: 100%; }
+  .leads-tabla thead { display: none; }
+  .leads-tabla tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "nombre estado" "modelo modelo" "vend acc";
+    align-items: center;
+    gap: 2px 10px;
+    padding: 12px 14px;
+    border-bottom: 0.5px solid rgba(60, 60, 67, 0.15);
+  }
+  .leads-tabla tr:active { background: #f2f2f7; }
+  .leads-tabla td { display: block; padding: 0 !important; border: 0 !important; white-space: normal; min-width: 0; }
+  .leads-tabla td[data-m="nombre"] { grid-area: nombre; font-size: 0.9375rem; font-weight: 650; }
+  .leads-tabla td[data-m="estado"] { grid-area: estado; justify-self: end; }
+  .leads-tabla td[data-m="modelo"] { grid-area: modelo; font-size: 0.8125rem; color: var(--gray-500); }
+  .leads-tabla td[data-m="vend"] { grid-area: vend; font-size: 0.75rem; }
+  .leads-tabla td[data-m="acc"] { grid-area: acc; justify-self: end; }
+  .leads-tabla td[data-m="acc"] .btn-icon { width: 36px; height: 36px; }
+  .leads-tabla td[data-m="check"],
+  .leads-tabla td[data-m="tel"],
+  .leads-tabla td[data-m="origen"],
+  .leads-tabla td[data-m="presu"],
+  .leads-tabla td[data-m="cita"] { display: none; }
+  .leads-tabla td[colspan] { grid-column: 1 / -1; }
+}
+@media (max-width: 768px) {
+  /* Borrar un lead desde la lista es muy fácil de tocar sin querer en el celular: queda solo en la ficha. */
+  .leads-tabla .btn-icon.danger { display: none; }
 }

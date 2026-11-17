@@ -299,7 +299,7 @@ export default function LeadsPage() {
       {viewMode === 'table' && (
         <div className="card">
           <div className="card-body-flush">
-            <table className="data-table">
+            <table className="data-table leads-tabla">
               <thead>
                 <tr>
                   {isAdmin && <th style={{ width: 36 }}><input type="checkbox" checked={selected.length === filtered.length && filtered.length > 0} onChange={toggleSelectAll} /></th>}
@@ -312,19 +312,19 @@ export default function LeadsPage() {
                   <tr><td colSpan={isAdmin ? 11 : 8}><div className="empty-state"><p>No se encontraron leads</p></div></td></tr>
                 ) : filtered.map(l => (
                   <tr key={l.id} className={`clickable ${selected.includes(l.id) ? 'selected' : ''}`}>
-                    {isAdmin && <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.includes(l.id)} onChange={() => toggleSelect(l.id)} /></td>}
-                    <td className="table-cell-primary" onClick={() => navigate(`/leads/${l.id}`)}>
+                    {isAdmin && <td data-m="check" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.includes(l.id)} onChange={() => toggleSelect(l.id)} /></td>}
+                    <td data-m="nombre" className="table-cell-primary" onClick={() => navigate(`/leads/${l.id}`)}>
                       {l.nombre}
                       <EtiquetasLead l={l} />
                     </td>
-                    <td onClick={() => navigate(`/leads/${l.id}`)}>{l.telefono || '-'}</td>
-                    <td onClick={() => navigate(`/leads/${l.id}`)}>{l.modelo_interes || '-'}</td>
-                    <td onClick={() => navigate(`/leads/${l.id}`)}>{ORIGEN_LABELS[l.origen] || l.origen}</td>
-                    <td onClick={() => navigate(`/leads/${l.id}`)}><span className={`badge badge-${l.estado}`}>{STATUS_LABELS[l.estado]}</span></td>
-                    <td onClick={() => navigate(`/leads/${l.id}`)}>{fmt$(l.presupuesto_estimado)}</td>
-                    {isAdmin && <td className="table-cell-secondary" onClick={() => navigate(`/leads/${l.id}`)}>{l.vendedor?.full_name || '-'}</td>}
-                    <td className="table-cell-secondary" onClick={() => navigate(`/leads/${l.id}`)}>{l.fecha_agenda ? new Date(l.fecha_agenda).toLocaleDateString('es-AR') : '-'}</td>
-                    <td>
+                    <td data-m="tel" onClick={() => navigate(`/leads/${l.id}`)}>{l.telefono || '-'}</td>
+                    <td data-m="modelo" onClick={() => navigate(`/leads/${l.id}`)}>{l.modelo_interes || '-'}</td>
+                    <td data-m="origen" onClick={() => navigate(`/leads/${l.id}`)}>{ORIGEN_LABELS[l.origen] || l.origen}</td>
+                    <td data-m="estado" onClick={() => navigate(`/leads/${l.id}`)}><span className={`badge badge-${l.estado}`}>{STATUS_LABELS[l.estado]}</span></td>
+                    <td data-m="presu" onClick={() => navigate(`/leads/${l.id}`)}>{fmt$(l.presupuesto_estimado)}</td>
+                    {isAdmin && <td data-m="vend" className="table-cell-secondary" onClick={() => navigate(`/leads/${l.id}`)}>{l.vendedor?.full_name || '-'}</td>}
+                    <td data-m="cita" className="table-cell-secondary" onClick={() => navigate(`/leads/${l.id}`)}>{l.fecha_agenda ? new Date(l.fecha_agenda).toLocaleDateString('es-AR') : '-'}</td>
+                    <td data-m="acc">
                       <div className="table-actions" onClick={e => e.stopPropagation()}>
                         {l.telefono && getWaLink(l.telefono) && <a href={getWaLink(l.telefono)} target="_blank" rel="noopener" className="btn-icon whatsapp" title="WhatsApp"><MessageCircle size={16} /></a>}
                         {l.telefono && <a href={`tel:${l.telefono}`} className="btn-icon phone" title="Llamar"><Phone size={16} /></a>}
