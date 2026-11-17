@@ -25,6 +25,7 @@ import {
   BarChart3,
   Target,
   Bot,
+  MoreHorizontal,
 } from 'lucide-react'
 
 export default function Layout() {
@@ -121,6 +122,7 @@ export default function Layout() {
       />
 
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-grabber" aria-hidden="true" />
         <div className="sidebar-brand">
           <h2>MOTO<span>BOX</span></h2>
           <div className="sidebar-role">
@@ -182,6 +184,25 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+
+      {/* Barra de pestañas de la app en el celular (en escritorio no se muestra). */}
+      <nav className="tabbar" aria-label="Navegación principal">
+        {[
+          { to: '/hoy', texto: 'Hoy', Icono: Target },
+          { to: '/leads', texto: 'Leads', Icono: UsersIcon },
+          { to: '/agente', texto: 'Chats', Icono: Bot },
+          { to: '/agenda', texto: 'Agenda', Icono: Calendar },
+        ].map(({ to, texto, Icono }) => (
+          <NavLink key={to} to={to} className={({ isActive }) => `tabbar-item ${isActive && !sidebarOpen ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+            <Icono size={22} strokeWidth={2} />
+            <span>{texto}</span>
+          </NavLink>
+        ))}
+        <button type="button" className={`tabbar-item ${sidebarOpen ? 'active' : ''}`} onClick={() => setSidebarOpen(!sidebarOpen)}>
+          <MoreHorizontal size={22} strokeWidth={2} />
+          <span>Más</span>
+        </button>
+      </nav>
     </div>
   )
 }

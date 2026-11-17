@@ -1,0 +1,249 @@
+/* =====================================================================
+   VERSIÓN CELULAR (app instalada y navegador del teléfono)
+   Todo lo que cambia la interfaz está dentro de @media (max-width: 768px):
+   la versión de escritorio no se toca. Fuera del media query solo se
+   ocultan las piezas nuevas que existen únicamente en el celular.
+   ===================================================================== */
+
+.tabbar,
+.sidebar-grabber { display: none; }
+
+@media (max-width: 768px) {
+  :root {
+    --tabbar-h: 58px;
+    --m-safe-top: env(safe-area-inset-top, 0px);
+    --m-safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: #f2f2f7;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  * { -webkit-tap-highlight-color: transparent; }
+
+  /* ---------- Estructura ---------- */
+  .app-layout { display: block; min-height: 100dvh; }
+  .main-content { margin-left: 0; min-width: 0; width: 100%; min-height: 100dvh; }
+  .page-content {
+    padding: 12px 14px calc(var(--tabbar-h) + var(--m-safe-bottom) + 20px);
+    min-width: 0;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+  .page-content > * { min-width: 0; }
+
+  /* ---------- Barra superior estilo iOS/Android ---------- */
+  .topbar {
+    height: auto;
+    min-height: calc(52px + var(--m-safe-top));
+    padding: var(--m-safe-top) 16px 0;
+    background: rgba(242, 242, 247, 0.88);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 0.5px solid rgba(60, 60, 67, 0.18);
+    box-shadow: none;
+  }
+  .topbar-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mobile-toggle { display: none !important; }
+  .topbar-actions .btn { height: 34px; padding: 0 12px; border-radius: 17px; font-size: 0.8125rem; }
+
+  /* ---------- Pestañas inferiores ---------- */
+  .tabbar {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    height: calc(var(--tabbar-h) + var(--m-safe-bottom));
+    padding-bottom: var(--m-safe-bottom);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-top: 0.5px solid rgba(60, 60, 67, 0.2);
+  }
+  .tabbar-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border: 0;
+    background: none;
+    color: #8e8e93;
+    font: inherit;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .tabbar-item.active { color: var(--primary, #007aff); }
+  .tabbar-item:active { opacity: 0.6; }
+
+  /* ---------- "Más": el menú completo como hoja desde abajo ---------- */
+  .sidebar {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: auto;
+    max-height: 78dvh;
+    border-radius: 20px 20px 0 0;
+    padding-bottom: calc(var(--tabbar-h) + var(--m-safe-bottom));
+    transform: translateY(105%);
+    transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+    z-index: 55;
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.25);
+  }
+  .sidebar.open { transform: translateY(0); }
+  .sidebar-overlay { z-index: 54; background: rgba(0, 0, 0, 0.35); }
+  .sidebar-grabber { display: block; width: 38px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.3); margin: 8px auto 0; }
+  .sidebar-brand { padding: 12px 20px 10px; }
+  .sidebar-nav { padding-top: 4px; }
+  .sidebar-link { min-height: 46px; font-size: 0.9375rem; }
+  .sidebar-link.active::before { display: none; }
+  .sidebar-footer { padding-bottom: 8px; }
+
+  /* ---------- Tarjetas, números y listas ---------- */
+  .card { border-radius: 14px; border: 0; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); margin-bottom: 12px; }
+  .card-header { padding: 14px 16px; }
+  .card-header h3 { font-size: 1rem; }
+  .card-body { padding: 14px 16px; }
+  .stats-row { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .stat-card { padding: 14px; border-radius: 14px; border: 0; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+  .stat-card-value { font-size: 1.5rem; }
+  .stat-card-label { font-size: 0.75rem; }
+
+  /* Tablas: se desplazan dentro de su tarjeta, nunca la pantalla entera. */
+  .card-body-flush, .table-wrapper, .cola-tabla-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+  .data-table { font-size: 0.8125rem; }
+  .data-table th, .data-table td { padding: 10px 12px; white-space: nowrap; }
+
+  /* ---------- Formularios: 16px para que el iPhone no haga zoom ---------- */
+  input, select, textarea, .form-input { font-size: 16px !important; }
+  .form-input { min-height: 44px; border-radius: 10px; }
+  .btn { min-height: 40px; border-radius: 10px; }
+  .btn-sm { min-height: 36px; }
+  .filters-bar { gap: 8px; }
+
+  /* ---------- Modales como hoja desde abajo ---------- */
+  .modal-overlay { align-items: flex-end; padding: 0; z-index: 70; }
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92dvh;
+    margin: 0;
+    border-radius: 20px 20px 0 0;
+    display: flex;
+    flex-direction: column;
+    animation: hojaSube 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .modal-header { position: relative; padding: 18px 16px 12px; }
+  .modal-header::before { content: ''; position: absolute; top: 7px; left: 50%; width: 38px; height: 5px; margin-left: -19px; border-radius: 3px; background: #d1d1d6; }
+  .modal form { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+  .modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 16px 16px; }
+  .modal-footer {
+    padding: 12px 16px calc(12px + var(--m-safe-bottom));
+    gap: 10px;
+    background: #fff;
+    border-top: 0.5px solid rgba(60, 60, 67, 0.18);
+  }
+  .modal-footer .btn { flex: 1; min-height: 48px; font-size: 1rem; }
+
+  /* ---------- Avisos (toasts) arriba, como notificación ---------- */
+  .toast-container { top: calc(var(--m-safe-top) + 8px) !important; bottom: auto !important; left: 12px !important; right: 12px !important; }
+  .toast { width: 100%; max-width: none; border-radius: 14px; }
+
+  /* ---------- Aviso de leads calientes: una píldora fina ---------- */
+  .alerta-calientes.compacta {
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 8px 8px 8px 12px;
+    margin-bottom: 12px;
+    border-radius: 12px;
+    border: 0;
+    background: #fff1e6;
+  }
+  .alerta-calientes.compacta .alerta-calientes-titulo { min-width: 0; flex: 1; font-size: 0.8125rem; line-height: 1.25; flex-wrap: nowrap; }
+  .alerta-calientes.compacta .btn-link { display: none; }
+  .alerta-calientes.compacta .btn { flex-shrink: 0; min-height: 32px; border-radius: 16px; padding: 0 12px; font-size: 0.75rem; }
+
+  /* ---------- Para vender hoy ---------- */
+  .hoy, .vivo { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+  .hoy > *, .vivo > * { min-width: 0; }
+  .hoy-resumen { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; gap: 8px; margin-bottom: 12px; }
+  .hoy-numero { min-width: 0; padding: 10px 12px; border-radius: 12px; border: 0; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+  .hoy-numero strong { font-size: 1.375rem; }
+  .hoy-numero span { font-size: 0.6875rem; }
+  .hoy-filtro { grid-column: 1 / -1; }
+  .hoy-pestanas, .vivo-filtros { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .hoy-pestanas::-webkit-scrollbar, .vivo-filtros::-webkit-scrollbar { display: none; }
+  .hoy-pestana { flex-shrink: 0; }
+  .hoy-fila { padding: 14px; }
+  .hoy-fila-principal { flex-direction: column; align-items: stretch; gap: 10px; }
+  .hoy-contacto { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
+  .hoy-contacto > * { width: 100%; justify-content: center; min-height: 40px; }
+  .hoy-resultados { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .hoy-resultados-label { grid-column: 1 / -1; }
+  .hoy-resultados .btn { width: 100%; justify-content: center; }
+  .hoy-extra { flex-wrap: wrap; }
+  .hoy-extra > * { flex: 1 1 100%; }
+
+  /* ---------- Agente en vivo ---------- */
+  .vivo .hoy-resumen { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .vivo-en-linea { grid-column: 1 / -1; justify-content: center; }
+  .vivo-lista, .vivo-chat { height: calc(100dvh - 300px - var(--tabbar-h) - var(--m-safe-bottom)); min-height: 360px; }
+  .vivo-panel.con-chat .vivo-chat { height: calc(100dvh - 120px - var(--tabbar-h) - var(--m-safe-bottom)); }
+
+  /* ---------- Ficha del lead ---------- */
+  .pipeline { overflow-x: auto; scrollbar-width: none; padding: 12px; border-radius: 14px; }
+  .pipeline::-webkit-scrollbar { display: none; }
+  .quick-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .quick-action {
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    min-height: 62px;
+    padding: 8px 4px;
+    border-radius: 14px;
+    font-size: 0.75rem;
+    text-align: center;
+  }
+  .quick-action:hover:not(:disabled) { transform: none; }
+  .lead-temp-badge { border-radius: 12px !important; }
+  .detail-row { gap: 12px; }
+  .detail-value { text-align: right; min-width: 0; overflow-wrap: anywhere; }
+  .wa-templates { border-radius: 14px; }
+  .chat-lead-cuerpo { max-height: 50dvh; }
+  .chat-lead-enviar { position: sticky; bottom: 0; background: #fff; border-radius: 0 0 14px 14px; }
+
+  /* ---------- Dashboard ---------- */
+  .lpd-summary-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .recharts-responsive-container { min-width: 0; }
+}
+
+@keyframes hojaSube {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* App instalada (sin barra del navegador): un poco más de aire arriba en iPhone. */
+@media (max-width: 768px) and (display-mode: standalone) {
+  .topbar { padding-top: max(var(--m-safe-top), 8px); }
+}
