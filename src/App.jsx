@@ -21,6 +21,8 @@ import VerificacionPage from './pages/VerificacionPage'
 import MetricasPage from './pages/MetricasPage'
 import Layout from './components/Layout'
 import { puedeVerificar } from './lib/verificacion'
+import { useEsMovil } from './movil/useEsMovil'
+import AppMovil from './movil/AppMovil'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, profile, loading } = useAuth()
@@ -70,6 +72,16 @@ function PublicRoute({ children }) {
 }
 
 function AppRoutes() {
+  // En el celular se usa una app aparte, hecha para el dedo; la versión de escritorio queda igual.
+  const movil = useEsMovil()
+  if (movil) {
+    return (
+      <Routes>
+        <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+        <Route path="/*" element={<ProtectedRoute><AppMovil /></ProtectedRoute>} />
+      </Routes>
+    )
+  }
   return (
     <Routes>
       <Route
