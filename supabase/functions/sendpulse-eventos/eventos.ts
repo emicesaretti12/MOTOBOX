@@ -8,6 +8,38 @@ export type Evento = {
   telefono: string | null
   nombre: string | null
   texto: string | null
+  anuncio_id: string | null
+  anuncio_titulo: string | null
+  ctwa_clid: string | null
+}
+
+export type Anuncio = { anuncio_id: string | null; anuncio_titulo: string | null; ctwa_clid: string | null }
+
+// Datos del anuncio cuando el mensaje llega desde un anuncio de Meta (clic a WhatsApp o a Instagram Direct).
+// WhatsApp los manda en message.referral { source_id, source_type: 'ad', headline, ctwa_clid };
+// Instagram en referral { ad_id, source: 'ADS' }. Se busca el primer objeto referral no vacío.
+export function anuncioDe(nodo: unknown, profundidad = 0): Anuncio {
+  const vacio: Anuncio = { anuncio_id: null, anuncio_titulo: null, ctwa_clid: null }
+  if (profundidad > 8 || !nodo || typeof nodo !== 'object') return vacio
+  if (Array.isArray(nodo)) {
+    for (const x of nodo) { const a = anuncioDe(x, profundidad + 1); if (a.anuncio_id || a.ctwa_clid) return a }
+    return vacio
+  }
+  const o = nodo as Record<string, unknown>
+  const ref = o.referral
+  if (ref && typeof ref === 'object' && !Array.isArray(ref)) {
+    const r = ref as Record<string, unknown>
+    const tipo = String(r.source_type ?? r.source ?? r.type ?? '').toLowerCase()
+    const id = str(r.ad_id) ?? (tipo === 'ad' || tipo === 'ads' || !tipo ? str(r.source_id) : null)
+    const a = { anuncio_id: id, anuncio_titulo: str(r.headline) ?? str(r.ads_context_data && (r.ads_context_data as Record<string, unknown>).ad_title) ?? str(r.body), ctwa_clid: str(r.ctwa_clid) }
+    if (a.anuncio_id || a.ctwa_clid) return { ...a, anuncio_titulo: a.anuncio_titulo ? a.anuncio_titulo.slice(0, 200) : null }
+  }
+  for (const [k, v] of Object.entries(o)) {
+    if (k === 'contact' || k === 'last_message_data') continue
+    const a = anuncioDe(v, profundidad + 1)
+    if (a.anuncio_id || a.ctwa_clid) return a
+  }
+  return vacio
 }
 
 const soloDigitos = (s: string) => s.replace(/\D/g, '')
@@ -86,6 +118,7 @@ export function normalizar(ev: Record<string, unknown>): Evento {
     telefono: str(contacto.phone),
     nombre: str(contacto.name) ?? str(contacto.username),
     texto,
+    ...(tipo === 'mensaje_entrante' ? anuncioDe(ev.info) : { anuncio_id: null, anuncio_titulo: null, ctwa_clid: null }),
   }
 }
 

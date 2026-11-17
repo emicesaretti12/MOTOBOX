@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, traerTodos } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import CalidadAnuncios from '../components/CalidadAnuncios'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { Users, Award, Target, DollarSign, ChevronRight, Phone, MessageCircle, Calendar, Flame, Snowflake, Clock, Zap, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react'
 
@@ -305,6 +306,8 @@ export default function DashboardPage() {
       {/* Leads por Día (admin) — FEATURED SECTION */}
       {isAdmin && (
         <>
+          <CalidadAnuncios />
+
           {/* Mini KPIs for leads per day */}
           <div className="lpd-summary-row">
             <div className="lpd-summary-card">
