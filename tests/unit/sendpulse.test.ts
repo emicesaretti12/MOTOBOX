@@ -54,6 +54,19 @@ describe('cliente SendPulse', () => {
     expect(esperas).toEqual([10, 20])
   })
 
+  it('si se corta por tiempo no reintenta, para no mandar el mensaje dos veces', async () => {
+    let envios = 0
+    const fn = (async (url: string, init: RequestInit) => {
+      if (url.endsWith('/oauth/access_token')) return respuesta(200, { access_token: 't', expires_in: 3600 })
+      envios++
+      return new Promise((_, rechazar) => init.signal?.addEventListener('abort', () => rechazar(new DOMException('abort', 'AbortError'))))
+    }) as typeof fetch
+    const sp = crearClienteSendPulse({ ...CFG, timeoutMs: 5 }, { fetch: fn, sleep: async () => {} })
+    const r = await sp.enviarTexto('c', 'hola')
+    expect(r.ok).toBe(false)
+    expect(envios).toBe(1)
+  })
+
   it('después de 3 fallos devuelve el último error', async () => {
     const { fn } = fetchFalso([TOKEN_OK(), respuesta(500), respuesta(503), respuesta(500, { message: 'caído' })])
     const sp = crearClienteSendPulse(CFG, { fetch: fn, sleep: async () => {} })

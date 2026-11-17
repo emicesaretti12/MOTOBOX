@@ -81,7 +81,7 @@ export function crearClienteSendPulse(cfg: ConfigSendPulse, deps: Partial<Depend
     now: deps.now ?? (() => Date.now()),
   }
   const base = cfg.apiUrl.replace(/\/+$/, '')
-  const timeoutMs = cfg.timeoutMs ?? 8000
+  const timeoutMs = cfg.timeoutMs ?? 20000
   const esperas = cfg.esperasMs ?? [500, 1500]
   let token: { valor: string; vence: number } | null = null
 
@@ -91,7 +91,10 @@ export function crearClienteSendPulse(cfg: ConfigSendPulse, deps: Partial<Depend
     try {
       return await d.fetch(url, { ...init, signal: control.signal })
     } catch {
-      throw new ErrorSendPulse('Sin respuesta de SendPulse (red o tiempo agotado)', true)
+      // Si se cortó por tiempo, SendPulse pudo haber recibido el pedido y mandado el mensaje: reintentar lo
+      // duplicaría (pasó el 17/11). Solo se reintenta cuando la conexión falló antes de llegar.
+      if (control.signal.aborted) throw new ErrorSendPulse('SendPulse no respondió a tiempo (no se reintenta para no duplicar el mensaje)', false)
+      throw new ErrorSendPulse('Sin respuesta de SendPulse (red)', true)
     } finally {
       clearTimeout(reloj)
     }
