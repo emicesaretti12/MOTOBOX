@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, traerTodos } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
+import AvisosPush from '../components/AvisosPush'
 import {
   Phone, MessageCircle, Mail, MapPin, Target, Award, TrendingUp, Calendar,
   Users, Clock, Plus, ChevronRight, Flame, Zap, AlertTriangle,
@@ -158,6 +159,21 @@ export default function ProfilePage() {
 
   return (
     <div>
+      <AvisosPush render={({ estado, texto, ocupado, alternar }) => (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 16, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0, flex: '1 1 280px' }}>
+              <strong style={{ display: 'block', marginBottom: 2 }}>🔔 Avisos en esta computadora</strong>
+              <span style={{ fontSize: '0.85rem', color: '#636366' }}>{texto}</span>
+            </div>
+            {['activos', 'apagados'].includes(estado) && (
+              <button className={`btn ${estado === 'activos' ? 'btn-secondary' : 'btn-primary'}`} disabled={ocupado} onClick={alternar}>
+                {ocupado ? 'Un momento…' : estado === 'activos' ? 'Apagar avisos' : 'Activar avisos'}
+              </button>
+            )}
+          </div>
+        </div>
+      )} />
       {/* ═══════════════════ ADMIN VIEW ═══════════════════ */}
       {isAdmin && stats && (
         <>

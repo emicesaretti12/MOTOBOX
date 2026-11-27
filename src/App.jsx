@@ -22,6 +22,7 @@ import MetricasPage from './pages/MetricasPage'
 import Layout from './components/Layout'
 import { puedeVerificar } from './lib/verificacion'
 import { useEsMovil } from './movil/useEsMovil'
+import CalculadoraPage from './pages/CalculadoraPage'
 import AppMovil from './movil/AppMovil'
 
 function ProtectedRoute({ children, adminOnly = false }) {
@@ -111,6 +112,7 @@ function AppRoutes() {
         <Route path="usados" element={<UsadosPage />} />
         <Route path="ventas" element={<SalesPage />} />
         <Route path="clientes" element={<ClientsPage />} />
+        <Route path="calculadora" element={<CalculadoraPage />} />
         <Route
           path="verificacion"
           element={
