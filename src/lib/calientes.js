@@ -19,17 +19,15 @@ function primerNombre(n) {
 }
 
 // Mensaje ya escrito para que el vendedor solo tenga que tocar "enviar".
-export function mensajeCaliente(l, vendedor) {
-  const nombre = primerNombre(l.nombre)
+export function primerMensaje(nombreCliente, vendedor) {
+  const nombre = primerNombre(nombreCliente)
   const yo = primerNombre(vendedor)
-  const modelo = String(l.modelo_interes || '').trim()
-  const moto = modelo && !/^\d+$/.test(modelo) ? `la ${modelo}` : 'la moto'
-  const saludo = `¡Hola${nombre ? ' ' + nombre : ''}! Soy ${yo || 'tu asesor'} de MotoBox Córdoba 🏍️`
-  const pago = { contado: 'de contado', tarjeta: 'con tarjeta de crédito', anticipo_cuotas: 'con anticipo + cuotas' }[l.forma_pago]
-  if (l.caliente_motivo === 'asesor' || !pago) {
-    return `${saludo} Vi tu consulta y quiero ayudarte a que te lleves ${moto}. ¿Te puedo llamar ahora o preferís que sigamos por acá?`
-  }
-  return `${saludo} Vi que querés ${moto} ${pago}. La tenemos con entrega inmediata en Santa Rosa 4227 (BoxPoint). ¿Podés pasar hoy o mañana a verla? Decime a qué hora y te la tengo lista.`
+  const quien = yo ? `Soy ${yo} del equipo de MotoBox Córdoba` : 'Te escribo del equipo de MotoBox Córdoba'
+  return `¡Hola${nombre ? ' ' + nombre : ''}! ${quien} 🏍️ Con nosotros te podés llevar tu próxima moto financiada solo con tu DNI.`
+}
+
+export function mensajeCaliente(l, vendedor) {
+  return primerMensaje(l?.nombre, vendedor)
 }
 
 export function linkCaliente(l, vendedor) {

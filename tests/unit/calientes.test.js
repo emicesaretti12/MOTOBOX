@@ -16,20 +16,14 @@ describe('alerta de leads calientes', () => {
     expect(r).toEqual(['contado-nuevo', 'contado-viejo', 'tarjeta', 'anticipo', 'apto', 'asesor'])
   })
 
-  it('arma el mensaje con nombre, vendedor, moto y forma de pago', () => {
+  it('arma el primer mensaje con nombre y vendedor', () => {
     const m = mensajeCaliente(L({ forma_pago: 'contado', modelo_interes: 'Honda Wave S' }), 'Mauricio Barbosa')
-    expect(m).toContain('¡Hola Diego! Soy Mauricio de MotoBox')
-    expect(m).toContain('la Honda Wave S de contado')
+    expect(m).toBe('¡Hola Diego! Soy Mauricio del equipo de MotoBox Córdoba 🏍️ Con nosotros te podés llevar tu próxima moto financiada solo con tu DNI.')
   })
 
-  it('no inventa nombre ni modelo cuando faltan', () => {
-    const m = mensajeCaliente(L({ nombre: 'Sin nombre (whatsapp)', forma_pago: 'tarjeta', modelo_interes: '' }), '')
-    expect(m).toContain('¡Hola! Soy tu asesor')
-    expect(m).toContain('la moto con tarjeta de crédito')
-  })
-
-  it('al que pidió asesor le ofrece llamarlo', () => {
-    expect(mensajeCaliente(L({ forma_pago: 'cuotas', caliente_motivo: 'asesor' }), 'Mauricio')).toContain('¿Te puedo llamar ahora')
+  it('no inventa nombre cuando falta', () => {
+    const m = mensajeCaliente(L({ nombre: 'Sin nombre (whatsapp)' }), '')
+    expect(m).toBe('¡Hola! Te escribo del equipo de MotoBox Córdoba 🏍️ Con nosotros te podés llevar tu próxima moto financiada solo con tu DNI.')
   })
 
   it('el link lleva el mensaje; sin teléfono no hay link', () => {

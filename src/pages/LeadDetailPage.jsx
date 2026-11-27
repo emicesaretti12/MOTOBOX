@@ -10,6 +10,7 @@ import RegistrarVenta from '../components/RegistrarVenta'
 import ChatLead from '../components/ChatLead'
 import { FORMA_PAGO_LABELS, nivelPuntaje } from '../lib/verificacion'
 import { useRefrescoAuto } from '../hooks/useRefrescoAuto'
+import { primerMensaje } from '../lib/calientes'
 
 const STATUS_LABELS = { nuevo: 'Nuevo', contactado: 'Contactado', en_negociacion: 'En Negociación', venta_cerrada: 'Venta Cerrada', perdido: 'Perdido' }
 const TIPO_LABELS = { llamada: 'Llamada', whatsapp: 'WhatsApp', email: 'Email', visita: 'Visita', otro: 'Otro' }
@@ -41,11 +42,11 @@ function getLeadTemp(lead, intCount) {
   return { label: '🔵 Frío', color: '#2563EB', bg: 'rgba(37,99,235,0.06)' }
 }
 
-function getTemplates(lead) {
+function getTemplates(lead, vendedor) {
   const name = lead.nombre?.split(' ')[0] || ''
   const model = lead.modelo_interes || 'la moto'
   return [
-    { label: '👋 Primer contacto', msg: `¡Hola ${name}! Soy del equipo de MotoBox. Vi que te interesa ${model}. ¿Te gustaría que te cuente más detalles?` },
+    { label: '👋 Primer contacto', msg: primerMensaje(lead.nombre, vendedor) },
     { label: '📋 Seguimiento', msg: `¡Hola ${name}! ¿Cómo estás? Te escribo para hacer seguimiento sobre ${model}. ¿Tenés alguna duda? Estoy para ayudarte.` },
     { label: '📅 Agendar cita', msg: `¡Hola ${name}! ¿Te gustaría pasar por MotoBox para ver ${model} en persona? ¿Qué día te queda cómodo?` },
     { label: '💰 Oferta', msg: `¡Hola ${name}! Tenemos una promoción especial en ${model}. ¿Te interesa que te cuente los detalles?` },
@@ -202,7 +203,7 @@ export default function LeadDetailPage() {
       {showTemplates && lead.telefono && (
         <div className="wa-templates">
           <div className="wa-templates-title">💬 Enviar mensaje personalizado</div>
-          {getTemplates(lead).map((t, i) => (
+          {getTemplates(lead, profile?.full_name).map((t, i) => (
             <a key={i} className="wa-template" href={getWaMsg(lead.telefono, t.msg)} target="_blank" rel="noopener">
               <span className="wa-template-label">{t.label}</span>
               <span className="wa-template-preview">{t.msg.substring(0, 60)}...</span>
