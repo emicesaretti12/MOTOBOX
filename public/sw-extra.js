@@ -11,3 +11,18 @@ self.addEventListener('notificationclick', (event) => {
     }),
   )
 })
+
+// Avisos push con la app cerrada (función enviar-push): muestra la notificación del lead.
+self.addEventListener('push', (event) => {
+  let d = {}
+  try { d = event.data ? event.data.json() : {} } catch { d = { body: event.data && event.data.text() } }
+  event.waitUntil(self.registration.showNotification(d.title || 'MotoBox CRM', {
+    body: d.body || 'Tenés un lead nuevo para atender.',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: d.tag || 'motobox',
+    renotify: true,
+    requireInteraction: true,
+    data: { url: d.url || '/hoy' },
+  }))
+})

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   DollarSign, Briefcase, Package, Gauge, LayoutDashboard, Activity, BarChart3, UserPlus, Ticket, Settings,
-  ShieldCheck, Smartphone, LogOut, UserCircle,
+  ShieldCheck, Smartphone, LogOut, UserCircle, Calculator, Bell,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCrmConfig } from '../hooks/useCrmConfig'
@@ -9,6 +9,7 @@ import { puedeVerificar } from '../lib/verificacion'
 import { esIOS, estaInstalada } from '../lib/instalarApp'
 import { USER_ROLE_LABELS } from '../lib/constants'
 import { Pantalla, Avatar, Seccion, Fila, Hoja, MenuAcciones } from './ui'
+import AvisosPush from '../components/AvisosPush'
 
 const Icono = ({ I, color }) => <span className="mv-icono-ajuste" style={{ background: color }}><I size={17} color="#fff" /></span>
 
@@ -54,6 +55,23 @@ export default function MasMovil() {
           <Fila to="/verificacion" izq={<Icono I={ShieldCheck} color="#34c759" />} titulo="Verificación de DNI" chevron />
         </Seccion>
       )}
+
+      <AvisosPush render={({ estado, texto, ocupado, alternar }) => (
+        <Seccion pie={texto}>
+          <Fila
+            onClick={alternar}
+            izq={<Icono I={Bell} color="#ff3b30" />}
+            titulo="Avisos de leads"
+            der={['activos', 'apagados'].includes(estado)
+              ? <span className={`mv-switch ${estado === 'activos' ? 'on' : ''} ${ocupado ? 'ocupado' : ''}`} role="switch" aria-checked={estado === 'activos'} />
+              : null}
+          />
+        </Seccion>
+      )} />
+
+      <Seccion>
+        <Fila to="/calculadora" izq={<Icono I={Calculator} color="#007aff" />} titulo="Calculadora de precios" sub="Contado, tarjetas y crédito con DNI" chevron />
+      </Seccion>
 
       <Seccion titulo="Negocio">
         <Fila to="/ventas" izq={<Icono I={DollarSign} color="#34c759" />} titulo="Ventas" chevron />

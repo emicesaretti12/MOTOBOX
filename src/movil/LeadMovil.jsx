@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { MessageCircle, Phone, ClipboardCheck, BadgeCheck, MoreHorizontal } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -27,6 +27,7 @@ function textoDni(l) {
 
 export default function LeadMovil() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const { profile } = useAuth()
   const { addToast } = useToast()
   const { lead, error, cargar, setLead } = useLead(id)
@@ -157,6 +158,7 @@ export default function LeadMovil() {
           enChat && lead.telefono && { texto: 'Abrir en WhatsApp', onClick: () => { abrirWhatsApp(lead.telefono, mensajeCaliente(lead, profile?.full_name)); setTimeout(() => setHoja('resultado'), 50) } },
           enChat && !cerrado && { texto: 'Anotar resultado', onClick: () => setTimeout(() => setHoja('resultado'), 50) },
           enChat && lead.estado !== 'venta_cerrada' && { texto: 'Registrar venta', onClick: () => setTimeout(() => setHoja('venta'), 50) },
+          { texto: 'Cotizar (calculadora)', onClick: () => navigate(`/calculadora?lead=${lead.id}`) },
           { texto: 'Cambiar estado', onClick: () => setTimeout(() => setHoja('estado'), 50) },
           lead.telefono && { texto: 'Copiar teléfono', onClick: () => navigator.clipboard?.writeText(lead.telefono).then(() => addToast('Teléfono copiado', 'success')) },
           !cerrado && { texto: 'Marcar como perdido', destructiva: true, onClick: () => setTimeout(() => setHoja('resultado'), 50) },

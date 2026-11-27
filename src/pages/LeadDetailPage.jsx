@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, MoreHorizontal, Edit, Plus, X, Check, Trash2, BadgeCheck } from 'lucide-react'
+import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, MoreHorizontal, Edit, Plus, X, Check, Trash2, BadgeCheck, Calculator } from 'lucide-react'
 import { LEAD_ORIGEN_LABELS } from '../lib/constants'
 import VerificacionCredito from '../components/VerificacionCredito'
 import RegistrarVenta from '../components/RegistrarVenta'
@@ -194,6 +194,7 @@ export default function LeadDetailPage() {
         <a className="quick-action call" href={lead.telefono ? `tel:${lead.telefono}` : '#'} {...(!lead.telefono && { disabled: true })}><Phone size={16} /> Llamar</a>
         <a className="quick-action mail" href={lead.email ? `mailto:${lead.email}` : '#'} {...(!lead.email && { disabled: true })}><Mail size={16} /> Email</a>
         {lead.estado !== 'venta_cerrada' && <button className="quick-action vendido" onClick={() => setShowVenta(true)}><BadgeCheck size={16} /> Vendido</button>}
+        <button className="quick-action" onClick={() => navigate(`/calculadora?lead=${lead.id}`)}><Calculator size={16} /> Cotizar</button>
         <button className="quick-action edit" onClick={openEdit}><Edit size={16} /> Editar</button>
         <button className="quick-action" onClick={() => setShowIntModal(true)}><Plus size={16} /> Interacción</button>
         {isAdmin && <button className="quick-action danger" onClick={async () => { if (window.confirm('¿Eliminar este lead?')) { await supabase.from('leads').delete().eq('id', id); addToast('Lead eliminado', 'success'); navigate('/leads') } }}><Trash2 size={16} /> Eliminar</button>}

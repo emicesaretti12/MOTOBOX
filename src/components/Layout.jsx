@@ -26,6 +26,7 @@ import {
   Target,
   Bot,
   MoreHorizontal,
+  Calculator,
 } from 'lucide-react'
 
 export default function Layout() {
@@ -49,6 +50,7 @@ export default function Layout() {
     if (path === '/leads') return 'Gestión de Leads'
     if (path.startsWith('/leads/')) return 'Detalle del Lead'
     if (path === '/agenda') return 'Agenda'
+    if (path === '/calculadora') return 'Calculadora de precios'
     if (path === '/monitor') return 'Monitor de Vendedores'
     if (path === '/usuarios') return 'Gestión de Usuarios'
         if (path === '/perfil') return 'Mi Perfil'
@@ -95,6 +97,7 @@ export default function Layout() {
       { to: '/agente', texto: 'Agente en vivo', Icono: Bot },
       { to: '/leads', texto: 'Leads', Icono: UsersIcon },
       { to: '/agenda', texto: 'Agenda', Icono: Calendar },
+      { to: '/calculadora', texto: 'Calculadora', Icono: Calculator },
       verVerificacion && { to: '/verificacion', texto: 'Verificación DNI', Icono: ShieldCheck },
     ] },
     { titulo: 'Negocio', links: [

@@ -1,0 +1,84 @@
+/* Calculadora de precios. Clases propias calc-*: no toca nada del resto del CRM. */
+.calc { display: flex; flex-direction: column; gap: 16px; max-width: 1100px; }
+.calc-cargando { padding: 40px; text-align: center; color: #8e8e93; }
+.calc-grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.calc-panel { background: #fff; border: 1px solid #ebebf0; border-radius: 14px; padding: 18px; min-width: 0; }
+.calc-panel h3 { margin: 0 0 10px; font-size: 15px; font-weight: 700; color: #1c1c1e; }
+.calc-panel-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.calc-panel-cab h3 { margin: 0; }
+.calc-aviso { background: rgba(217, 119, 6, 0.08); color: #92400e; border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.45; }
+.calc-aviso.rojo { background: rgba(220, 38, 38, 0.08); color: #991b1b; }
+.calc-link { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 6px 0; color: #007aff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.calc-lead { font-size: 14px; color: #48484a; background: #f5f5f7; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+
+.calc-datos { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 16px; }
+.calc-campo { display: flex; flex-direction: column; gap: 6px; }
+.calc-campo span { font-size: 12px; font-weight: 600; color: #636366; text-transform: uppercase; letter-spacing: 0.03em; }
+.calc-campo input, .calc-campo select {
+  height: 46px; border: 1px solid #d1d1d6; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 17px; background: #fff; color: #1c1c1e; width: 100%;
+}
+.calc-campo input:focus, .calc-campo select:focus { outline: none; border-color: #007aff; box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15); }
+.calc-check { display: flex; gap: 8px; align-items: center; font-size: 14px; color: #3a3a3c; }
+.calc-resumen { border-top: 1px solid #ebebf0; padding-top: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.calc-resumen div { display: flex; justify-content: space-between; color: #636366; }
+.calc-resumen strong { color: #1c1c1e; font-variant-numeric: tabular-nums; }
+.calc-resumen .total { font-size: 16px; }
+.calc-resumen .total span { color: #1c1c1e; font-weight: 600; }
+
+.calc-resultados { display: flex; flex-direction: column; gap: 14px; }
+.calc-ayuda { margin: 0; font-size: 13px; color: #8e8e93; }
+.calc-vacio { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #aeaeb2; padding: 40px 10px; text-align: center; }
+.calc-vacio p { margin: 0; color: #8e8e93; max-width: 300px; }
+.calc-bloque h3 { font-size: 14px; margin-bottom: 6px; }
+.calc-nota { margin: 0; font-size: 14px; color: #92400e; }
+.calc-opcion {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+  border: 1px solid #ebebf0; background: #fafafa; border-radius: 12px; padding: 10px 12px; margin-bottom: 6px;
+  font: inherit; text-align: left; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+.calc-opcion:hover { border-color: #c7c7cc; }
+.calc-opcion.activa { border-color: #007aff; background: rgba(0, 122, 255, 0.06); }
+.calc-opcion-izq { display: flex; align-items: center; gap: 10px; font-size: 15px; color: #1c1c1e; min-width: 0; }
+.calc-opcion-izq small { display: block; font-size: 12px; color: #8e8e93; margin-top: 1px; }
+.calc-opcion strong { font-size: 18px; font-variant-numeric: tabular-nums; color: #1c1c1e; white-space: nowrap; }
+.calc-tilde { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid #c7c7cc; display: grid; place-items: center; flex: 0 0 auto; color: #fff; }
+.calc-opcion.activa .calc-tilde { background: #007aff; border-color: #007aff; }
+
+.calc-presupuesto pre {
+  margin: 0 0 12px; white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 14px; line-height: 1.5;
+  background: #f0fdf4; border: 1px solid #dcfce7; border-radius: 12px; padding: 12px 14px; color: #1c1c1e;
+}
+.calc-acciones { display: flex; gap: 10px; flex-wrap: wrap; }
+.calc-boton {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 44px; padding: 0 18px; border-radius: 12px; border: 0;
+  background: #007aff; color: #fff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; text-decoration: none;
+}
+.calc-boton:hover { filter: brightness(0.95); }
+.calc-boton:disabled { opacity: 0.5; cursor: default; }
+.calc-boton.secundario { background: #f2f2f7; color: #1c1c1e; }
+.calc-boton.wa { background: #25d366; color: #fff; }
+.calc-boton.chico { height: 34px; padding: 0 12px; font-size: 13px; }
+
+.calc-editor .calc-panel { display: flex; flex-direction: column; gap: 8px; }
+.calc-fila { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; color: #48484a; }
+.calc-fila input { height: 38px; border: 1px solid #d1d1d6; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 15px; flex: 1 1 160px; min-width: 0; }
+.calc-fila input.corto { flex: 0 0 70px; width: 70px; text-align: center; }
+.calc-fila input.medio { flex: 0 0 140px; width: 140px; }
+.calc-fila .ancho { flex: 1 1 160px; }
+.calc-titulo-input { border: 0; font: inherit; font-size: 15px; font-weight: 700; padding: 4px 0; flex: 1; min-width: 0; color: #1c1c1e; }
+.calc-titulo-input:focus { outline: none; border-bottom: 2px solid #007aff; }
+.calc-icono { background: none; border: 0; color: #ff3b30; padding: 6px; cursor: pointer; border-radius: 8px; display: grid; place-items: center; }
+.calc-icono:hover { background: rgba(255, 59, 48, 0.08); }
+.calc-acciones.fijas { justify-content: flex-end; }
+
+/* ---------- Celular ---------- */
+@media (max-width: 768px) {
+  .calc-grid { grid-template-columns: minmax(0, 1fr); }
+  .calc-datos { position: static; }
+}
+.calc-movil { padding: 0 16px 24px; gap: 14px; }
+.calc-movil .calc-panel { border: 0; border-radius: 12px; padding: 14px; }
+.calc-movil .calc-acciones .calc-boton { flex: 1 1 0; height: 48px; }
+.calc-movil .calc-acciones.fijas {
+  position: sticky; bottom: calc(env(safe-area-inset-bottom, 0px) + 60px); background: #f2f2f7; padding: 8px 0; margin: 0;
+}

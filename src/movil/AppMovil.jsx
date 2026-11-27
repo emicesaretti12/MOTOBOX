@@ -23,6 +23,7 @@ import LeadMovil from './LeadMovil'
 import ChatsMovil, { ConversacionMovil } from './ChatsMovil'
 import AgendaMovil from './AgendaMovil'
 import MasMovil from './MasMovil'
+import Calculadora from '../components/Calculadora'
 import './app.css'
 
 const PESTANAS = [
@@ -123,6 +124,7 @@ export default function AppMovil() {
           <Route path="/agente/:clave" element={<ConversacionMovil />} />
           <Route path="/agenda" element={<AgendaMovil />} />
           <Route path="/mas" element={<MasMovil />} />
+          <Route path="/calculadora" element={<Pantalla titulo="Calculadora" atras sinTituloGrande className="mv-escritorio"><Calculadora movil /></Pantalla>} />
           <Route path="/" element={<Escritorio titulo="Dashboard"><DashboardPage /></Escritorio>} />
           <Route path="/perfil" element={<Escritorio titulo="Mi perfil"><ProfilePage /></Escritorio>} />
           <Route path="/ventas" element={<Escritorio titulo="Ventas"><SalesPage /></Escritorio>} />
